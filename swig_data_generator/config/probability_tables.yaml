@@ -1,0 +1,134 @@
+# Probability Tables for Swig Synthetic Data Generation
+# These conditional probabilities drive realistic order patterns
+
+# Base drink selection probabilities
+base_drink_probabilities:
+  # Signature drinks are most popular
+  SIG001: 0.12  # Texas Tab
+  SIG002: 0.10  # Raspberry Dream
+  SIG003: 0.06  # Island Dream
+  SIG004: 0.08  # The Founder
+  SIG005: 0.10  # Dirty Dr Pepper
+  SIG006: 0.04  # Miami Vice
+  SIG007: 0.03  # The Refresher
+  SIG008: 0.03  # Peach Ring
+  SIG009: 0.03  # Blue Coconut
+  SIG010: 0.03  # Sunset
+  # Regular sodas (often customized)
+  BASE001: 0.08  # Dr Pepper
+  BASE002: 0.03  # Diet Dr Pepper
+  BASE003: 0.04  # Coca-Cola
+  BASE004: 0.08  # Diet Coke
+  BASE005: 0.06  # Sprite
+  BASE006: 0.02  # Sprite Zero
+  BASE007: 0.03  # Mountain Dew
+  BASE008: 0.01  # Diet Mountain Dew
+  BASE009: 0.02  # Lemonade
+  BASE010: 0.01  # Water
+
+# Modifier conditional probabilities given base drink
+# Format: base_sku -> modifier_sku -> probability
+modifier_given_base:
+  # Dr Pepper variants love coconut cream
+  BASE001:  # Regular Dr Pepper
+    MOD001: 0.55  # Coconut Cream
+    SYR001: 0.40  # Vanilla Syrup
+    ADD001: 0.20  # Fresh Lime
+  BASE002:  # Diet Dr Pepper
+    MOD001: 0.50
+    SYR010: 0.35  # SF Vanilla
+    ADD001: 0.25
+  # Diet Coke - the "Founder" effect
+  BASE004:
+    MOD001: 0.60  # Coconut Cream
+    ADD001: 0.45  # Fresh Lime
+    SYR003: 0.20  # Coconut Syrup
+  # Sprite - fruity additions
+  BASE005:
+    PUR001: 0.35  # Raspberry Puree
+    PUR003: 0.30  # Strawberry Puree
+    MOD001: 0.40  # Coconut Cream
+    SYR007: 0.15  # Blue Raspberry
+  # Mountain Dew - tropical
+  BASE007:
+    PUR004: 0.45  # Mango Puree
+    SYR005: 0.30  # Mango Syrup
+    MOD001: 0.25
+  # Lemonade - berry and fruit
+  BASE009:
+    PUR003: 0.50  # Strawberry
+    PUR001: 0.35  # Raspberry
+    SYR002: 0.25  # Raspberry Syrup
+
+# Food attachment rates by time of day
+food_attachment_rates:
+  morning:    # 6am-11am
+    rate: 0.15
+    FOOD001: 0.40  # Sugar Cookie
+    FOOD002: 0.35  # Chocolate Chip
+    FOOD005: 0.25  # Brownie
+  lunch:      # 11am-2pm
+    rate: 0.25
+    FOOD003: 0.45  # Pretzel Bites
+    FOOD001: 0.25
+    FOOD002: 0.20
+    FOOD004: 0.10  # Cookie Dough
+  after_school:  # 2pm-5pm (PEAK)
+    rate: 0.45
+    FOOD001: 0.30
+    FOOD002: 0.25
+    FOOD003: 0.20
+    FOOD004: 0.15
+    FOOD005: 0.10
+  evening:    # 5pm-10pm
+    rate: 0.20
+    FOOD001: 0.35
+    FOOD002: 0.30
+    FOOD003: 0.20
+    FOOD004: 0.15
+
+# Service channel distribution
+service_channel_probabilities:
+  weekday:
+    Drive_Thru: 0.85
+    Walk_Up: 0.08
+    Mobile_Pickup: 0.05
+    Delivery_3rdParty: 0.02
+  weekend:
+    Drive_Thru: 0.75
+    Walk_Up: 0.15
+    Mobile_Pickup: 0.07
+    Delivery_3rdParty: 0.03
+
+# Payment type distribution
+payment_type_probabilities:
+  Credit_Card: 0.55
+  Debit_Card: 0.20
+  Apple_Pay: 0.12
+  Google_Pay: 0.05
+  Cash: 0.05
+  Swig_Gift_Card: 0.02
+  Loyalty_Points: 0.01
+
+# Tip probability and amounts
+tip_behavior:
+  probability: 0.35  # 35% of credit/digital transactions tip
+  distribution:  # Given they tip
+    $1.00: 0.30
+    $2.00: 0.35
+    $3.00: 0.20
+    $5.00: 0.10
+    other: 0.05  # Random amount
+
+# Multiple drink probability (per order)
+items_per_order:
+  1: 0.45
+  2: 0.30
+  3: 0.15
+  4: 0.07
+  5: 0.03
+
+# Loyalty program engagement
+loyalty_rates:
+  identified_rate: 0.40  # 40% of transactions linked to loyalty
+  new_signup_rate: 0.02  # 2% are new signups
