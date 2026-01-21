@@ -1,4 +1,4 @@
-export type TabId = 'overview' | 'workforce' | 'sales' | 'inventory' | 'weekly';
+export type TabId = 'swigai' | 'overview' | 'workforce' | 'sales' | 'inventory' | 'weekly';
 
 interface Tab {
   id: TabId;
@@ -6,6 +6,7 @@ interface Tab {
 }
 
 const tabs: Tab[] = [
+  { id: 'swigai', label: 'SwigAI' },
   { id: 'overview', label: 'Daily Overview' },
   { id: 'workforce', label: 'Workforce' },
   { id: 'sales', label: 'Sales' },

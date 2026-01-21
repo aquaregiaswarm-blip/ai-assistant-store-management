@@ -2,6 +2,14 @@ import type { TabId } from '../common/TabNavigation';
 import type { SuggestedQuery } from '../../types';
 
 export const tabSuggestedQueries: Record<TabId, SuggestedQuery[]> = {
+  swigai: [
+    { text: 'What should I focus on for the rest of today?', category: 'planning' },
+    { text: 'Help me plan staffing for tomorrow', category: 'staffing' },
+    { text: 'What are the trends I should know about?', category: 'trends' },
+    { text: 'Are there any compliance risks this week?', category: 'compliance' },
+    { text: 'What inventory should I be watching?', category: 'inventory' },
+    { text: 'Give me a briefing for the week ahead', category: 'planning' },
+  ],
   overview: [
     { text: 'How did we do yesterday?', category: 'performance' },
     { text: 'What was our peak hour?', category: 'operations' },

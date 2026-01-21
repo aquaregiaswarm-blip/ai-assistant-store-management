@@ -6,10 +6,16 @@ import type { TabId } from '../common/TabNavigation';
 interface GlobalChatWidgetProps {
   storeId: number;
   activeTab: TabId;
+  hidden?: boolean;
 }
 
-export default function GlobalChatWidget({ storeId, activeTab }: GlobalChatWidgetProps) {
+export default function GlobalChatWidget({ storeId, activeTab, hidden = false }: GlobalChatWidgetProps) {
   const [isOpen, setIsOpen] = useState(false);
+
+  // Don't render anything when hidden (e.g., on SwigAI tab where chat is embedded)
+  if (hidden) {
+    return null;
+  }
 
   return (
     <>
@@ -18,10 +24,10 @@ export default function GlobalChatWidget({ storeId, activeTab }: GlobalChatWidge
         <button
           onClick={() => setIsOpen(true)}
           className="fixed bottom-4 right-4 z-50 flex items-center gap-2 px-4 py-3 bg-swig-pink text-white rounded-full shadow-lg hover:bg-swig-pink-dark hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-          aria-label="Open AI Assistant"
+          aria-label="Open SwigAI Assistant"
         >
           <Sparkles className="w-5 h-5" />
-          <span className="font-medium">Ask AI</span>
+          <span className="font-medium">SwigAI</span>
         </button>
       )}
 

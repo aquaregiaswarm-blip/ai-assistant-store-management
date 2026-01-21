@@ -12,6 +12,7 @@ import DailyRoster from './components/Labor/DailyRoster';
 import SalesSummary from './components/Sales/SalesSummary';
 import InventoryUsage from './components/Inventory/InventoryUsage';
 import WeeklySummaryView from './components/Weekly/WeeklySummary';
+import SwigAIView from './components/SwigAI/SwigAIView';
 import { getStores, getKPIs, getHourlyData, getAlerts, getWhosWorking, getViolations } from './services/api';
 
 // Data range in the database
@@ -21,7 +22,7 @@ const MAX_DATE = '2025-01-26';
 function App() {
   const [selectedStore, setSelectedStore] = useState(1001);
   const [selectedDate, setSelectedDate] = useState(MAX_DATE);
-  const [activeTab, setActiveTab] = useState<TabId>('overview');
+  const [activeTab, setActiveTab] = useState<TabId>('swigai');
 
   // Fetch stores
   const { data: stores = [] } = useQuery({
@@ -66,6 +67,9 @@ function App() {
 
   const renderTabContent = () => {
     switch (activeTab) {
+      case 'swigai':
+        return <SwigAIView storeId={selectedStore} date={selectedDate} />;
+
       case 'overview':
         return (
           <>
@@ -139,8 +143,8 @@ function App() {
         {renderTabContent()}
       </main>
 
-      {/* Global Chat Widget */}
-      <GlobalChatWidget storeId={selectedStore} activeTab={activeTab} />
+      {/* Global Chat Widget - hidden on SwigAI tab since chat is embedded */}
+      <GlobalChatWidget storeId={selectedStore} activeTab={activeTab} hidden={activeTab === 'swigai'} />
     </div>
   );
 }

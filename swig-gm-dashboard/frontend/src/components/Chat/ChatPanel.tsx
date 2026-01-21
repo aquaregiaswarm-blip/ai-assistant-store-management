@@ -10,16 +10,26 @@ import { tabSuggestedQueries } from './tabSuggestedQueries';
 interface ChatPanelProps {
   storeId: number;
   activeTab: TabId;
+  variant?: 'widget' | 'embedded';
+  onSendMessage?: (message: string) => void;
+  externalMessage?: string | null;
 }
 
-export default function ChatPanel({ storeId, activeTab }: ChatPanelProps) {
+export default function ChatPanel({
+  storeId,
+  activeTab,
+  variant = 'widget',
+  externalMessage,
+}: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | undefined>();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const processedExternalRef = useRef<string | null>(null);
 
   const suggestedQueries = tabSuggestedQueries[activeTab];
+  const isEmbedded = variant === 'embedded';
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -28,6 +38,14 @@ export default function ChatPanel({ storeId, activeTab }: ChatPanelProps) {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Handle external messages from the insights panel
+  useEffect(() => {
+    if (externalMessage && externalMessage !== processedExternalRef.current) {
+      processedExternalRef.current = externalMessage;
+      handleSend(externalMessage);
+    }
+  }, [externalMessage]);
 
   const handleSend = async (text: string) => {
     if (!text.trim() || isLoading) return;
@@ -89,7 +107,7 @@ export default function ChatPanel({ storeId, activeTab }: ChatPanelProps) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col h-[500px]">
+    <div className={`bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col ${isEmbedded ? 'h-full' : 'h-[500px]'}`}>
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
         <div className="flex items-center gap-2">
@@ -97,7 +115,7 @@ export default function ChatPanel({ storeId, activeTab }: ChatPanelProps) {
             <Sparkles className="w-4 h-4 text-white" />
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900">AI Assistant</h3>
+            <h3 className="font-semibold text-gray-900">SwigAI Assistant</h3>
             <p className="text-xs text-gray-500">Ask me anything about your store</p>
           </div>
         </div>
