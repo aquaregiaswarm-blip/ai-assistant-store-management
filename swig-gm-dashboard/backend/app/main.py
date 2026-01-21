@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routers import dashboard, transactions, workforce, chat
+from .routers import dashboard, transactions, workforce, chat, inventory, weekly
 from .config import settings
 
 app = FastAPI(
@@ -25,6 +25,8 @@ app.include_router(dashboard.router, prefix="/api")
 app.include_router(transactions.router, prefix="/api")
 app.include_router(workforce.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
+app.include_router(inventory.router, prefix="/api")
+app.include_router(weekly.router, prefix="/api")
 
 
 @app.get("/")

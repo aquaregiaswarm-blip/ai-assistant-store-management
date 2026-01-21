@@ -109,8 +109,13 @@ async def get_compliance_violations(
     days_back: int = Query(7, description="Number of days to look back")
 ):
     """Get recent compliance violations."""
+    from datetime import datetime, timedelta
     db = get_db()
     target_date = date or settings.data_current_date
+
+    # Calculate start date in Python since DuckDB doesn't handle parameterized date arithmetic well
+    end_date = datetime.strptime(target_date, "%Y-%m-%d")
+    start_date = (end_date - timedelta(days=days_back)).strftime("%Y-%m-%d")
 
     results = db.query("""
         SELECT
@@ -128,9 +133,9 @@ async def get_compliance_violations(
         FROM Labor_Compliance_Violations v
         JOIN Employee_Master_Profile e ON v.Employee_ID = e.Employee_ID
         WHERE v.Store_ID = ?
-          AND v.Violation_Date BETWEEN DATE ? - INTERVAL ? DAY AND DATE ?
+          AND v.Violation_Date BETWEEN ? AND ?
         ORDER BY v.Violation_Date DESC, v.Penalty_Cost DESC
-    """, [store_id, target_date, days_back, target_date])
+    """, [store_id, start_date, target_date])
 
     return [
         {
@@ -197,6 +202,152 @@ async def get_minor_status(
         })
 
     return minors
+
+
+@router.get("/roster")
+async def get_daily_roster(
+    store_id: int = Query(1001),
+    date: str = Query(None)
+):
+    """Get full daily roster with schedule vs actual comparison."""
+    db = get_db()
+    target_date = date or settings.data_current_date
+
+    results = db.query("""
+        SELECT
+            e.Employee_ID,
+            e.First_Name,
+            e.Last_Name,
+            e.Role_Code,
+            e.Is_Minor,
+            e.Hourly_Wage,
+            s.Schedule_UUID,
+            s.Shift_Start as scheduled_start,
+            s.Shift_End as scheduled_end,
+            s.Scheduled_Hours,
+            s.Job_Role,
+            t.Punch_UUID,
+            t.Clock_In_Time,
+            t.Clock_Out_Time,
+            t.Break_Start,
+            t.Break_End,
+            t.Break_Duration_Minutes,
+            t.Actual_Hours,
+            t.Is_Late,
+            t.Late_Minutes,
+            t.Is_No_Show
+        FROM Labor_Schedules_Published s
+        JOIN Employee_Master_Profile e ON s.Employee_ID = e.Employee_ID
+        LEFT JOIN Time_Attendance_Actuals t ON s.Schedule_UUID = t.Schedule_UUID
+        WHERE s.Store_ID = ? AND s.Shift_Date = ?
+        ORDER BY s.Shift_Start, e.Last_Name
+    """, [store_id, target_date])
+
+    roster = []
+    total_scheduled_hours = 0
+    total_actual_hours = 0
+    total_labor_cost = 0
+
+    for r in results:
+        scheduled = float(r["Scheduled_Hours"]) if r["Scheduled_Hours"] else 0
+        actual = float(r["Actual_Hours"]) if r["Actual_Hours"] else 0
+        wage = float(r["Hourly_Wage"])
+        labor_cost = actual * wage
+
+        total_scheduled_hours += scheduled
+        total_actual_hours += actual
+        total_labor_cost += labor_cost
+
+        # Determine break compliance
+        break_taken = r["Break_Start"] is not None
+        break_required = actual >= 5.0
+        break_compliant = not break_required or break_taken
+
+        roster.append({
+            "employee_id": r["Employee_ID"],
+            "name": f"{r['First_Name']} {r['Last_Name']}",
+            "role": r["Role_Code"],
+            "job_role": r["Job_Role"],
+            "is_minor": r["Is_Minor"],
+            "hourly_wage": wage,
+            "schedule": {
+                "start": str(r["scheduled_start"]) if r["scheduled_start"] else None,
+                "end": str(r["scheduled_end"]) if r["scheduled_end"] else None,
+                "hours": scheduled
+            },
+            "actual": {
+                "clock_in": str(r["Clock_In_Time"]) if r["Clock_In_Time"] else None,
+                "clock_out": str(r["Clock_Out_Time"]) if r["Clock_Out_Time"] else None,
+                "hours": actual
+            },
+            "variance": round(actual - scheduled, 2),
+            "break": {
+                "taken": break_taken,
+                "start": str(r["Break_Start"]) if r["Break_Start"] else None,
+                "end": str(r["Break_End"]) if r["Break_End"] else None,
+                "duration_minutes": r["Break_Duration_Minutes"],
+                "compliant": break_compliant
+            },
+            "attendance": {
+                "is_late": r["Is_Late"] or False,
+                "late_minutes": r["Late_Minutes"] or 0,
+                "is_no_show": r["Is_No_Show"] or False
+            },
+            "labor_cost": round(labor_cost, 2)
+        })
+
+    # Get violations for these employees
+    violations = db.query("""
+        SELECT
+            v.Employee_ID,
+            v.Violation_Type,
+            v.Description,
+            v.Penalty_Cost
+        FROM Labor_Compliance_Violations v
+        WHERE v.Store_ID = ? AND v.Violation_Date = ?
+    """, [store_id, target_date])
+
+    violations_by_employee = {}
+    for v in violations:
+        emp_id = v["Employee_ID"]
+        if emp_id not in violations_by_employee:
+            violations_by_employee[emp_id] = []
+        violations_by_employee[emp_id].append({
+            "type": v["Violation_Type"],
+            "description": v["Description"],
+            "penalty": float(v["Penalty_Cost"])
+        })
+
+    # Attach violations to roster entries
+    for entry in roster:
+        entry["violations"] = violations_by_employee.get(entry["employee_id"], [])
+
+    # Role distribution
+    role_counts = {}
+    for entry in roster:
+        role = entry["role"]
+        if role not in role_counts:
+            role_counts[role] = 0
+        role_counts[role] += 1
+
+    return {
+        "date": target_date,
+        "roster": roster,
+        "summary": {
+            "employee_count": len(roster),
+            "total_scheduled_hours": round(total_scheduled_hours, 1),
+            "total_actual_hours": round(total_actual_hours, 1),
+            "hours_variance": round(total_actual_hours - total_scheduled_hours, 1),
+            "total_labor_cost": round(total_labor_cost, 2),
+            "late_arrivals": sum(1 for r in roster if r["attendance"]["is_late"]),
+            "no_shows": sum(1 for r in roster if r["attendance"]["is_no_show"]),
+            "break_violations": sum(1 for r in roster if not r["break"]["compliant"])
+        },
+        "role_distribution": [
+            {"role": role, "count": count}
+            for role, count in sorted(role_counts.items(), key=lambda x: -x[1])
+        ]
+    }
 
 
 @router.get("/overtime-risk")

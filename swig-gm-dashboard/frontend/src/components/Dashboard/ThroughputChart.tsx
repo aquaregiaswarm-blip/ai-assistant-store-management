@@ -1,12 +1,34 @@
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import type { HourlyData } from '../../types';
+import { getHourlyDetail } from '../../services/api';
+import HourlyDetailPanel from './HourlyDetailPanel';
 
 interface ThroughputChartProps {
   data: HourlyData[] | undefined;
   isLoading: boolean;
+  storeId: number;
+  date: string;
 }
 
-export default function ThroughputChart({ data, isLoading }: ThroughputChartProps) {
+export default function ThroughputChart({ data, isLoading, storeId, date }: ThroughputChartProps) {
+  const [selectedHour, setSelectedHour] = useState<number | null>(null);
+
+  const { data: hourlyDetail, isLoading: detailLoading } = useQuery({
+    queryKey: ['hourly-detail', storeId, selectedHour, date],
+    queryFn: () => getHourlyDetail(storeId, selectedHour!, date),
+    enabled: selectedHour !== null,
+  });
+
+  const handleBarClick = (data: { hour: number }) => {
+    if (selectedHour === data.hour) {
+      setSelectedHour(null);
+    } else {
+      setSelectedHour(data.hour);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
@@ -34,7 +56,10 @@ export default function ThroughputChart({ data, isLoading }: ThroughputChartProp
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">Hourly Performance</h3>
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">Hourly Performance</h3>
+          <p className="text-sm text-gray-500">Click a bar to see hourly details</p>
+        </div>
         {peakHour && (
           <span className="text-sm text-swig-pink font-medium">
             Peak: {peakHour.hour_label} ({peakHour.transactions} transactions)
@@ -43,7 +68,11 @@ export default function ThroughputChart({ data, isLoading }: ThroughputChartProp
       </div>
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={sortedData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+          <BarChart
+            data={sortedData}
+            margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
+            onClick={(e) => e?.activePayload?.[0]?.payload && handleBarClick(e.activePayload[0].payload)}
+          >
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
             <XAxis
               dataKey="hour"
@@ -65,17 +94,32 @@ export default function ThroughputChart({ data, isLoading }: ThroughputChartProp
               labelFormatter={(hour) => `${hour}:00 - ${Number(hour) + 1}:00`}
               contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
             />
-            <Bar dataKey="transactions" name="transactions" radius={[4, 4, 0, 0]}>
+            <Bar dataKey="transactions" name="transactions" radius={[4, 4, 0, 0]} style={{ cursor: 'pointer' }}>
               {sortedData.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
-                  fill={entry.is_peak ? '#E91E63' : '#93c5fd'}
+                  fill={
+                    selectedHour === entry.hour
+                      ? '#9C27B0'
+                      : entry.is_peak
+                      ? '#E91E63'
+                      : '#93c5fd'
+                  }
                 />
               ))}
             </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
+
+      {/* Expandable Detail Panel */}
+      {selectedHour !== null && (
+        <HourlyDetailPanel
+          detail={hourlyDetail}
+          isLoading={detailLoading}
+          onClose={() => setSelectedHour(null)}
+        />
+      )}
     </div>
   );
 }
