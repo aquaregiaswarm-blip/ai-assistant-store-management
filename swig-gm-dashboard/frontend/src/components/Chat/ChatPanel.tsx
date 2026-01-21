@@ -2,25 +2,24 @@ import { useState, useRef, useEffect } from 'react';
 import { Send, MessageSquare, Trash2, Sparkles } from 'lucide-react';
 import MessageBubble from './MessageBubble';
 import SuggestedQueries from './SuggestedQueries';
-import { sendChatMessage, getSuggestedQueries, clearSession } from '../../services/api';
+import { sendChatMessage, clearSession } from '../../services/api';
 import type { ChatMessage } from '../../types';
-import { useQuery } from '@tanstack/react-query';
+import type { TabId } from '../common/TabNavigation';
+import { tabSuggestedQueries } from './tabSuggestedQueries';
 
 interface ChatPanelProps {
   storeId: number;
+  activeTab: TabId;
 }
 
-export default function ChatPanel({ storeId }: ChatPanelProps) {
+export default function ChatPanel({ storeId, activeTab }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | undefined>();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const { data: suggestedQueries } = useQuery({
-    queryKey: ['suggested-queries'],
-    queryFn: getSuggestedQueries,
-  });
+  const suggestedQueries = tabSuggestedQueries[activeTab];
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

@@ -7,7 +7,7 @@ import ThroughputChart from './components/Dashboard/ThroughputChart';
 import AlertBanner from './components/Dashboard/AlertBanner';
 import WhoIsWorking from './components/Labor/WhoIsWorking';
 import ComplianceCard from './components/Labor/ComplianceCard';
-import ChatPanel from './components/Chat/ChatPanel';
+import GlobalChatWidget from './components/Chat/GlobalChatWidget';
 import DailyRoster from './components/Labor/DailyRoster';
 import SalesSummary from './components/Sales/SalesSummary';
 import InventoryUsage from './components/Inventory/InventoryUsage';
@@ -89,16 +89,13 @@ function App() {
               </div>
             </section>
 
-            {/* Labor and Chat Row */}
-            <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="space-y-6">
+            {/* Labor Row */}
+            <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div>
                 <WhoIsWorking employees={employees} isLoading={employeesLoading} />
               </div>
               <div>
                 <ComplianceCard violations={violations} isLoading={violationsLoading} />
-              </div>
-              <div>
-                <ChatPanel storeId={selectedStore} />
               </div>
             </section>
           </>
@@ -138,9 +135,12 @@ function App() {
       <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-6 py-6">
+      <main className="max-w-7xl mx-auto px-6 py-6 pb-20">
         {renderTabContent()}
       </main>
+
+      {/* Global Chat Widget */}
+      <GlobalChatWidget storeId={selectedStore} activeTab={activeTab} />
     </div>
   );
 }
