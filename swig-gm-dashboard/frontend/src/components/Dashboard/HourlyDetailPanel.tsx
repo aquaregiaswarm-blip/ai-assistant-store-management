@@ -9,8 +9,8 @@ interface HourlyDetailPanelProps {
 export default function HourlyDetailPanel({ detail, isLoading, onClose }: HourlyDetailPanelProps) {
   if (isLoading) {
     return (
-      <div className="bg-gray-50 rounded-lg p-4 mt-4 animate-pulse">
-        <div className="h-32 bg-gray-200 rounded"></div>
+      <div className="bg-swig-card rounded-xl p-4 mt-4 animate-pulse">
+        <div className="h-32 bg-white rounded-lg"></div>
       </div>
     );
   }
@@ -26,14 +26,14 @@ export default function HourlyDetailPanel({ detail, isLoading, onClose }: Hourly
   };
 
   return (
-    <div className="bg-gray-50 rounded-lg p-4 mt-4 border border-gray-200">
+    <div className="bg-swig-card rounded-xl p-5 mt-4 border border-gray-100">
       <div className="flex items-center justify-between mb-4">
-        <h4 className="text-lg font-semibold text-gray-900">
+        <h4 className="text-lg font-display font-bold text-swig-navy">
           {detail.hour_label} Details
         </h4>
         <button
           onClick={onClose}
-          className="text-gray-400 hover:text-gray-600 transition-colors"
+          className="text-swig-slate hover:text-swig-navy transition-colors p-1"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -41,49 +41,49 @@ export default function HourlyDetailPanel({ detail, isLoading, onClose }: Hourly
         </button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
         {/* Transactions */}
-        <div className="bg-white rounded-lg p-3 shadow-sm">
-          <div className="text-xs text-gray-500 uppercase tracking-wide">Transactions</div>
-          <div className="text-xl font-bold text-gray-900">{detail.transactions.count}</div>
-          <div className="text-sm text-gray-600">{formatCurrency(detail.transactions.revenue)}</div>
+        <div className="bg-white rounded-xl p-3 shadow-sm">
+          <div className="text-xs text-swig-slate uppercase tracking-wide font-semibold">Transactions</div>
+          <div className="text-xl font-display font-bold text-swig-navy">{detail.transactions.count}</div>
+          <div className="text-sm text-swig-slate">{formatCurrency(detail.transactions.revenue)}</div>
         </div>
 
         {/* Avg Ticket */}
-        <div className="bg-white rounded-lg p-3 shadow-sm">
-          <div className="text-xs text-gray-500 uppercase tracking-wide">Avg Ticket</div>
-          <div className="text-xl font-bold text-gray-900">{formatCurrency(detail.transactions.avg_ticket)}</div>
+        <div className="bg-white rounded-xl p-3 shadow-sm">
+          <div className="text-xs text-swig-slate uppercase tracking-wide font-semibold">Avg Ticket</div>
+          <div className="text-xl font-display font-bold text-swig-navy">{formatCurrency(detail.transactions.avg_ticket)}</div>
         </div>
 
         {/* Staff Count */}
-        <div className="bg-white rounded-lg p-3 shadow-sm">
-          <div className="text-xs text-gray-500 uppercase tracking-wide">Staff On Duty</div>
-          <div className="text-xl font-bold text-gray-900">{detail.labor.staff_count}</div>
-          <div className="text-sm text-gray-600">{formatCurrency(detail.labor.hourly_cost)}/hr</div>
+        <div className="bg-white rounded-xl p-3 shadow-sm">
+          <div className="text-xs text-swig-slate uppercase tracking-wide font-semibold">Staff On Duty</div>
+          <div className="text-xl font-display font-bold text-swig-navy">{detail.labor.staff_count}</div>
+          <div className="text-sm text-swig-slate">{formatCurrency(detail.labor.hourly_cost)}/hr</div>
         </div>
 
         {/* Drive-Thru Speed */}
-        <div className="bg-white rounded-lg p-3 shadow-sm">
-          <div className="text-xs text-gray-500 uppercase tracking-wide">DT Service Time</div>
-          <div className="text-xl font-bold text-gray-900">{formatTime(detail.drive_thru.avg_service_seconds)}</div>
-          <div className="text-sm text-gray-600">{detail.drive_thru.cars_served} cars</div>
+        <div className="bg-white rounded-xl p-3 shadow-sm">
+          <div className="text-xs text-swig-slate uppercase tracking-wide font-semibold">DT Service Time</div>
+          <div className="text-xl font-display font-bold text-swig-navy">{formatTime(detail.drive_thru.avg_service_seconds)}</div>
+          <div className="text-sm text-swig-slate">{detail.drive_thru.cars_served} cars</div>
         </div>
 
         {/* Top Item */}
         {detail.top_items[0] && (
-          <div className="bg-white rounded-lg p-3 shadow-sm">
-            <div className="text-xs text-gray-500 uppercase tracking-wide">Top Seller</div>
-            <div className="text-sm font-bold text-gray-900 truncate">{detail.top_items[0].name}</div>
-            <div className="text-sm text-gray-600">{detail.top_items[0].quantity} sold</div>
+          <div className="bg-white rounded-xl p-3 shadow-sm">
+            <div className="text-xs text-swig-slate uppercase tracking-wide font-semibold">Top Seller</div>
+            <div className="text-sm font-bold text-swig-navy truncate">{detail.top_items[0].name}</div>
+            <div className="text-sm text-swig-slate">{detail.top_items[0].quantity} sold</div>
           </div>
         )}
 
         {/* Channel Mix */}
         {detail.channels.length > 0 && (
-          <div className="bg-white rounded-lg p-3 shadow-sm">
-            <div className="text-xs text-gray-500 uppercase tracking-wide">Top Channel</div>
-            <div className="text-sm font-bold text-gray-900">{detail.channels[0]?.channel.replace('_', ' ')}</div>
-            <div className="text-sm text-gray-600">{detail.channels[0]?.percentage}%</div>
+          <div className="bg-white rounded-xl p-3 shadow-sm">
+            <div className="text-xs text-swig-slate uppercase tracking-wide font-semibold">Top Channel</div>
+            <div className="text-sm font-bold text-swig-navy">{detail.channels[0]?.channel.replace('_', ' ')}</div>
+            <div className="text-sm text-swig-slate">{detail.channels[0]?.percentage}%</div>
           </div>
         )}
       </div>
@@ -91,12 +91,12 @@ export default function HourlyDetailPanel({ detail, isLoading, onClose }: Hourly
       {/* Staff List */}
       {detail.staff.length > 0 && (
         <div className="mt-4">
-          <h5 className="text-sm font-medium text-gray-700 mb-2">Staff Working</h5>
+          <h5 className="text-sm font-semibold text-swig-navy mb-2">Staff Working</h5>
           <div className="flex flex-wrap gap-2">
             {detail.staff.map((s) => (
               <span
                 key={s.employee_id}
-                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-swig-navy/10 text-swig-navy"
               >
                 {s.name} ({s.role})
               </span>
@@ -108,12 +108,12 @@ export default function HourlyDetailPanel({ detail, isLoading, onClose }: Hourly
       {/* Channel Breakdown */}
       {detail.channels.length > 1 && (
         <div className="mt-4">
-          <h5 className="text-sm font-medium text-gray-700 mb-2">Service Channels</h5>
+          <h5 className="text-sm font-semibold text-swig-navy mb-2">Service Channels</h5>
           <div className="flex gap-4">
             {detail.channels.map((c) => (
               <div key={c.channel} className="text-sm">
-                <span className="text-gray-600">{c.channel.replace('_', ' ')}:</span>{' '}
-                <span className="font-medium">{c.percentage}%</span>
+                <span className="text-swig-slate">{c.channel.replace('_', ' ')}:</span>{' '}
+                <span className="font-semibold text-swig-navy">{c.percentage}%</span>
               </div>
             ))}
           </div>

@@ -94,7 +94,7 @@ export default function DailyRoster({ storeId, date }: DailyRosterProps) {
 
       {/* Role Distribution */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-        <h3 className="text-sm font-medium text-gray-700 mb-3">Role Distribution</h3>
+        <h3 className="text-sm font-display font-semibold text-swig-navy mb-3">Role Distribution</h3>
         <div className="flex flex-wrap gap-3">
           {data.role_distribution.map((r) => (
             <div key={r.role} className="flex items-center gap-2">
@@ -110,7 +110,7 @@ export default function DailyRoster({ storeId, date }: DailyRosterProps) {
       {/* Roster Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-900">Employee Roster</h3>
+          <h3 className="text-lg font-display font-bold text-swig-navy">Employee Roster</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">

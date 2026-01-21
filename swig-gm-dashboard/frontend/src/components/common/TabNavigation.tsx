@@ -20,7 +20,7 @@ interface TabNavigationProps {
 
 export default function TabNavigation({ activeTab, onTabChange }: TabNavigationProps) {
   return (
-    <div className="bg-white border-b border-gray-200">
+    <div className="bg-white border-b border-gray-100 shadow-sm">
       <div className="max-w-7xl mx-auto px-6">
         <nav className="flex space-x-1" aria-label="Tabs">
           {tabs.map((tab) => (
@@ -28,12 +28,13 @@ export default function TabNavigation({ activeTab, onTabChange }: TabNavigationP
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
               className={`
-                px-4 py-3 text-sm font-medium border-b-2 transition-colors
+                px-5 py-3.5 text-sm font-semibold border-b-3 transition-all duration-200
                 ${activeTab === tab.id
-                  ? 'border-swig-pink text-swig-pink'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-swig-red text-swig-red'
+                  : 'border-transparent text-swig-slate hover:text-swig-navy hover:border-swig-slate-light'
                 }
               `}
+              style={{ borderBottomWidth: '3px' }}
             >
               {tab.label}
             </button>

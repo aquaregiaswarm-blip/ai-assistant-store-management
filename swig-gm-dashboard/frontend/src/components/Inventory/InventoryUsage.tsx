@@ -7,7 +7,8 @@ interface InventoryUsageProps {
   date: string;
 }
 
-const COLORS = ['#E91E63', '#2196F3', '#4CAF50', '#FF9800', '#9C27B0', '#00BCD4', '#795548', '#607D8B'];
+// Brand-aligned color palette
+const COLORS = ['#EF3D4E', '#0A1F44', '#8EA1AF', '#4CAF50', '#FF9800', '#9C27B0', '#00BCD4', '#795548'];
 
 export default function InventoryUsage({ storeId, date }: InventoryUsageProps) {
   const { data: cogs, isLoading: cogsLoading } = useQuery({
@@ -86,7 +87,7 @@ export default function InventoryUsage({ storeId, date }: InventoryUsageProps) {
 
       {/* COGS Breakdown Visual */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Cost Breakdown Visualization</h3>
+        <h3 className="text-lg font-display font-bold text-swig-navy mb-4">Cost Breakdown Visualization</h3>
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-center">
           {/* Revenue Bar */}
           <div className="text-center">
@@ -134,7 +135,7 @@ export default function InventoryUsage({ storeId, date }: InventoryUsageProps) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* COGS by Category Pie Chart */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">COGS by Ingredient Category</h3>
+          <h3 className="text-lg font-display font-bold text-swig-navy mb-4">COGS by Ingredient Category</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -163,7 +164,7 @@ export default function InventoryUsage({ storeId, date }: InventoryUsageProps) {
 
         {/* Category Cost Bar Chart */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Cost by Category</h3>
+          <h3 className="text-lg font-display font-bold text-swig-navy mb-4">Cost by Category</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={categoryBarData} layout="vertical" margin={{ left: 80 }}>
@@ -174,7 +175,7 @@ export default function InventoryUsage({ storeId, date }: InventoryUsageProps) {
                   formatter={(value: number) => formatCurrency(value)}
                   contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
                 />
-                <Bar dataKey="cost" fill="#E91E63" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="cost" fill="#EF3D4E" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -184,7 +185,7 @@ export default function InventoryUsage({ storeId, date }: InventoryUsageProps) {
       {/* Category Breakdown Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-900">COGS Breakdown by Category</h3>
+          <h3 className="text-lg font-display font-bold text-swig-navy">COGS Breakdown by Category</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -227,7 +228,7 @@ export default function InventoryUsage({ storeId, date }: InventoryUsageProps) {
       {/* Top Items by Category */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-900">Ingredient Usage Details</h3>
+          <h3 className="text-lg font-display font-bold text-swig-navy">Ingredient Usage Details</h3>
         </div>
         <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {usageByCategory?.map((category) => (

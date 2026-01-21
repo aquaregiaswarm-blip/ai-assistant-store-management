@@ -5,6 +5,11 @@ import type { HourlyData } from '../../types';
 import { getHourlyDetail } from '../../services/api';
 import HourlyDetailPanel from './HourlyDetailPanel';
 
+// Brand colors
+const SWIG_RED = '#EF3D4E';
+const SWIG_NAVY = '#0A1F44';
+const SWIG_SLATE = '#8EA1AF';
+
 interface ThroughputChartProps {
   data: HourlyData[] | undefined;
   isLoading: boolean;
@@ -31,18 +36,18 @@ export default function ThroughputChart({ data, isLoading, storeId, date }: Thro
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Hourly Performance</h3>
-        <div className="h-64 bg-gray-100 animate-pulse rounded"></div>
+      <div className="bg-white rounded-card shadow-card p-6">
+        <h3 className="text-lg font-display font-bold text-swig-navy mb-4">Hourly Performance</h3>
+        <div className="h-64 bg-swig-card animate-pulse rounded-lg"></div>
       </div>
     );
   }
 
   if (!data || data.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Hourly Performance</h3>
-        <div className="h-64 flex items-center justify-center text-gray-500">
+      <div className="bg-white rounded-card shadow-card p-6">
+        <h3 className="text-lg font-display font-bold text-swig-navy mb-4">Hourly Performance</h3>
+        <div className="h-64 flex items-center justify-center text-swig-slate">
           No data available
         </div>
       </div>
@@ -54,14 +59,14 @@ export default function ThroughputChart({ data, isLoading, storeId, date }: Thro
   const peakHour = data.find(d => d.is_peak);
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+    <div className="bg-white rounded-card shadow-card p-6">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="text-lg font-semibold text-gray-900">Hourly Performance</h3>
-          <p className="text-sm text-gray-500">Click a bar to see hourly details</p>
+          <h3 className="text-lg font-display font-bold text-swig-navy">Hourly Performance</h3>
+          <p className="text-sm text-swig-slate">Click a bar to see hourly details</p>
         </div>
         {peakHour && (
-          <span className="text-sm text-swig-pink font-medium">
+          <span className="text-sm text-swig-red font-semibold bg-swig-red/10 px-3 py-1 rounded-full">
             Peak: {peakHour.hour_label} ({peakHour.transactions} transactions)
           </span>
         )}
@@ -73,16 +78,16 @@ export default function ThroughputChart({ data, isLoading, storeId, date }: Thro
             margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
             onClick={(e) => e?.activePayload?.[0]?.payload && handleBarClick(e.activePayload[0].payload)}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
             <XAxis
               dataKey="hour"
               tickFormatter={(hour) => `${hour}:00`}
-              tick={{ fontSize: 12 }}
-              stroke="#9ca3af"
+              tick={{ fontSize: 12, fill: SWIG_SLATE }}
+              stroke={SWIG_SLATE}
             />
             <YAxis
-              tick={{ fontSize: 12 }}
-              stroke="#9ca3af"
+              tick={{ fontSize: 12, fill: SWIG_SLATE }}
+              stroke={SWIG_SLATE}
               tickFormatter={(value) => value.toLocaleString()}
             />
             <Tooltip
@@ -92,18 +97,23 @@ export default function ThroughputChart({ data, isLoading, storeId, date }: Thro
                 return [value, name];
               }}
               labelFormatter={(hour) => `${hour}:00 - ${Number(hour) + 1}:00`}
-              contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+              contentStyle={{
+                borderRadius: '12px',
+                border: 'none',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                fontFamily: 'Open Sans, sans-serif'
+              }}
             />
-            <Bar dataKey="transactions" name="transactions" radius={[4, 4, 0, 0]} style={{ cursor: 'pointer' }}>
+            <Bar dataKey="transactions" name="transactions" radius={[6, 6, 0, 0]} style={{ cursor: 'pointer' }}>
               {sortedData.map((entry, index) => (
                 <Cell
                   key={`cell-${index}`}
                   fill={
                     selectedHour === entry.hour
-                      ? '#9C27B0'
+                      ? SWIG_NAVY
                       : entry.is_peak
-                      ? '#E91E63'
-                      : '#93c5fd'
+                      ? SWIG_RED
+                      : SWIG_SLATE
                   }
                 />
               ))}

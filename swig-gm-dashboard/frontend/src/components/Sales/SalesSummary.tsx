@@ -7,7 +7,8 @@ interface SalesSummaryProps {
   date: string;
 }
 
-const COLORS = ['#E91E63', '#2196F3', '#4CAF50', '#FF9800', '#9C27B0', '#00BCD4', '#795548', '#607D8B'];
+// Brand-aligned color palette
+const COLORS = ['#EF3D4E', '#0A1F44', '#8EA1AF', '#4CAF50', '#FF9800', '#9C27B0', '#00BCD4', '#795548'];
 
 export default function SalesSummary({ storeId, date }: SalesSummaryProps) {
   const { data: salesByCategory, isLoading: categoryLoading } = useQuery({
@@ -98,7 +99,7 @@ export default function SalesSummary({ storeId, date }: SalesSummaryProps) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Sales by Category */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Sales by Category</h3>
+          <h3 className="text-lg font-display font-bold text-swig-navy mb-4">Sales by Category</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -127,7 +128,7 @@ export default function SalesSummary({ storeId, date }: SalesSummaryProps) {
 
         {/* Payment Methods */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment Methods</h3>
+          <h3 className="text-lg font-display font-bold text-swig-navy mb-4">Payment Methods</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -160,7 +161,7 @@ export default function SalesSummary({ storeId, date }: SalesSummaryProps) {
         {/* Top Items */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-900">Top Selling Items</h3>
+            <h3 className="text-lg font-display font-bold text-swig-navy">Top Selling Items</h3>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -192,7 +193,7 @@ export default function SalesSummary({ storeId, date }: SalesSummaryProps) {
         {/* Category Breakdown Table */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-900">Category Breakdown</h3>
+            <h3 className="text-lg font-display font-bold text-swig-navy">Category Breakdown</h3>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -229,7 +230,7 @@ export default function SalesSummary({ storeId, date }: SalesSummaryProps) {
       {/* Payment Details Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-900">Payment Method Details</h3>
+          <h3 className="text-lg font-display font-bold text-swig-navy">Payment Method Details</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">

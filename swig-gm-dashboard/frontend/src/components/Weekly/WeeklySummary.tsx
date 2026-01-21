@@ -64,7 +64,7 @@ export default function WeeklySummaryView({ storeId, date }: WeeklySummaryProps)
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Week of {formatDate(summary?.week_start || '')}</h2>
+            <h2 className="text-xl font-display font-bold text-swig-navy">Week of {formatDate(summary?.week_start || '')}</h2>
             <p className="text-sm text-gray-500">{formatDate(summary?.week_start || '')} - {formatDate(summary?.week_end || '')}</p>
           </div>
           {comparison && (
@@ -109,7 +109,7 @@ export default function WeeklySummaryView({ storeId, date }: WeeklySummaryProps)
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
           <div className="text-xs text-gray-500 uppercase tracking-wide">Loyalty %</div>
-          <div className="text-xl font-bold text-swig-pink">{summary?.sales.loyalty_percentage || 0}%</div>
+          <div className="text-xl font-bold text-swig-red">{summary?.sales.loyalty_percentage || 0}%</div>
           <div className="text-xs text-gray-500">{summary?.sales.loyalty_transactions} members</div>
         </div>
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
@@ -143,7 +143,7 @@ export default function WeeklySummaryView({ storeId, date }: WeeklySummaryProps)
 
       {/* Revenue Trend Chart */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Daily Revenue Trend</h3>
+        <h3 className="text-lg font-display font-bold text-swig-navy mb-4">Daily Revenue Trend</h3>
         <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={trends?.daily || []} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
@@ -167,8 +167,8 @@ export default function WeeklySummaryView({ storeId, date }: WeeklySummaryProps)
                 contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
               />
               <Legend />
-              <Line type="monotone" dataKey="revenue" name="Revenue" stroke="#E91E63" strokeWidth={3} dot={{ fill: '#E91E63' }} />
-              <Line type="monotone" dataKey="labor_cost" name="Labor Cost" stroke="#2196F3" strokeWidth={2} dot={{ fill: '#2196F3' }} />
+              <Line type="monotone" dataKey="revenue" name="Revenue" stroke="#EF3D4E" strokeWidth={3} dot={{ fill: '#EF3D4E' }} />
+              <Line type="monotone" dataKey="labor_cost" name="Labor Cost" stroke="#0A1F44" strokeWidth={2} dot={{ fill: '#0A1F44' }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -178,7 +178,7 @@ export default function WeeklySummaryView({ storeId, date }: WeeklySummaryProps)
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Transactions Bar Chart */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Daily Transactions</h3>
+          <h3 className="text-lg font-display font-bold text-swig-navy mb-4">Daily Transactions</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={trends?.daily || []}>
@@ -193,7 +193,7 @@ export default function WeeklySummaryView({ storeId, date }: WeeklySummaryProps)
                   formatter={(value: number) => [value.toLocaleString(), 'Transactions']}
                   contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
                 />
-                <Bar dataKey="transactions" fill="#E91E63" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="transactions" fill="#EF3D4E" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -201,7 +201,7 @@ export default function WeeklySummaryView({ storeId, date }: WeeklySummaryProps)
 
         {/* Labor % Trend */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Daily Labor %</h3>
+          <h3 className="text-lg font-display font-bold text-swig-navy mb-4">Daily Labor %</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={trends?.daily || []}>
@@ -237,7 +237,7 @@ export default function WeeklySummaryView({ storeId, date }: WeeklySummaryProps)
       {comparison && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-900">Week-over-Week Comparison</h3>
+            <h3 className="text-lg font-display font-bold text-swig-navy">Week-over-Week Comparison</h3>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -297,13 +297,13 @@ export default function WeeklySummaryView({ storeId, date }: WeeklySummaryProps)
       {/* Top Items for the Week */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-900">Top Sellers This Week</h3>
+          <h3 className="text-lg font-display font-bold text-swig-navy">Top Sellers This Week</h3>
         </div>
         <div className="p-6">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
             {summary?.top_items.map((item, i) => (
               <div key={i} className="text-center p-4 bg-gray-50 rounded-lg">
-                <div className="text-2xl font-bold text-swig-pink mb-1">#{i + 1}</div>
+                <div className="text-2xl font-bold text-swig-red mb-1">#{i + 1}</div>
                 <div className="text-sm font-medium text-gray-900 mb-1">{item.name}</div>
                 <div className="text-xs text-gray-500">{item.quantity} sold</div>
                 <div className="text-xs text-gray-500">{formatCurrency(item.revenue)}</div>

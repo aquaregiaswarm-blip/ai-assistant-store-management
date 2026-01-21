@@ -1,4 +1,4 @@
-import { DollarSign, ShoppingCart, Users } from 'lucide-react';
+import { DollarSign, ShoppingCart, Users, TrendingUp } from 'lucide-react';
 import type { KPIs } from '../../types';
 
 interface KPICardsProps {
@@ -15,10 +15,9 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-function formatChange(value: number): { text: string; color: string } {
+function formatChange(value: number): { text: string; isPositive: boolean } {
   const sign = value >= 0 ? '+' : '';
-  const color = value >= 0 ? 'text-green-600' : 'text-red-600';
-  return { text: `${sign}${value.toFixed(1)}%`, color };
+  return { text: `${sign}${value.toFixed(1)}%`, isPositive: value >= 0 };
 }
 
 interface KPICardProps {
@@ -27,30 +26,40 @@ interface KPICardProps {
   change?: number;
   changeLabel?: string;
   icon: React.ReactNode;
-  iconBgColor: string;
+  accentColor: 'red' | 'navy' | 'slate' | 'green';
   isLoading: boolean;
 }
 
-function KPICard({ title, value, change, changeLabel, icon, iconBgColor, isLoading }: KPICardProps) {
+const accentStyles = {
+  red: 'bg-swig-red/10 text-swig-red',
+  navy: 'bg-swig-navy/10 text-swig-navy',
+  slate: 'bg-swig-slate/20 text-swig-slate',
+  green: 'bg-green-50 text-green-600',
+};
+
+function KPICard({ title, value, change, changeLabel, icon, accentColor, isLoading }: KPICardProps) {
   const changeFormatted = change !== undefined ? formatChange(change) : null;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+    <div className="bg-white rounded-card shadow-card p-6 hover:shadow-card-hover transition-shadow duration-200">
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <p className="text-sm font-medium text-gray-500">{title}</p>
+          <p className="text-sm font-semibold text-swig-slate uppercase tracking-wide">{title}</p>
           {isLoading ? (
-            <div className="h-8 w-24 bg-gray-200 animate-pulse rounded mt-1"></div>
+            <div className="h-9 w-28 bg-swig-card animate-pulse rounded-lg mt-2"></div>
           ) : (
-            <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+            <p className="text-3xl font-display font-bold text-swig-navy mt-2">{value}</p>
           )}
           {changeFormatted && !isLoading && (
-            <p className={`text-sm mt-1 ${changeFormatted.color}`}>
-              {changeFormatted.text} <span className="text-gray-400">{changeLabel}</span>
+            <p className="text-sm mt-2 flex items-center gap-1">
+              <span className={changeFormatted.isPositive ? 'text-green-600 font-semibold' : 'text-swig-red font-semibold'}>
+                {changeFormatted.text}
+              </span>
+              <span className="text-swig-slate">{changeLabel}</span>
             </p>
           )}
         </div>
-        <div className={`p-3 rounded-lg ${iconBgColor}`}>
+        <div className={`p-3 rounded-xl ${accentStyles[accentColor]}`}>
           {icon}
         </div>
       </div>
@@ -60,14 +69,14 @@ function KPICard({ title, value, change, changeLabel, icon, iconBgColor, isLoadi
 
 export default function KPICards({ kpis, isLoading }: KPICardsProps) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
       <KPICard
         title="Today's Revenue"
         value={kpis ? formatCurrency(kpis.revenue) : '$0'}
         change={kpis?.vs_yesterday.revenue}
         changeLabel="vs yesterday"
-        icon={<DollarSign className="w-6 h-6 text-green-600" />}
-        iconBgColor="bg-green-50"
+        icon={<DollarSign className="w-6 h-6" />}
+        accentColor="green"
         isLoading={isLoading}
       />
       <KPICard
@@ -75,22 +84,22 @@ export default function KPICards({ kpis, isLoading }: KPICardsProps) {
         value={kpis ? kpis.transactions.toLocaleString() : '0'}
         change={kpis?.vs_yesterday.transactions}
         changeLabel="vs yesterday"
-        icon={<ShoppingCart className="w-6 h-6 text-blue-600" />}
-        iconBgColor="bg-blue-50"
+        icon={<ShoppingCart className="w-6 h-6" />}
+        accentColor="navy"
         isLoading={isLoading}
       />
       <KPICard
         title="Avg Ticket"
         value={kpis ? `$${kpis.avg_ticket.toFixed(2)}` : '$0.00'}
-        icon={<DollarSign className="w-6 h-6 text-purple-600" />}
-        iconBgColor="bg-purple-50"
+        icon={<TrendingUp className="w-6 h-6" />}
+        accentColor="red"
         isLoading={isLoading}
       />
       <KPICard
         title="Labor %"
         value={kpis ? `${kpis.labor_percentage.toFixed(1)}%` : '0%'}
-        icon={<Users className="w-6 h-6 text-orange-600" />}
-        iconBgColor="bg-orange-50"
+        icon={<Users className="w-6 h-6" />}
+        accentColor="slate"
         isLoading={isLoading}
       />
     </div>

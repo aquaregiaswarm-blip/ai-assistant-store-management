@@ -49,17 +49,17 @@ export default function Header({
   const canGoNext = selectedDate < maxDate;
 
   return (
-    <header className="bg-white border-b border-gray-200 px-6 py-4">
-      <div className="flex items-center justify-between">
+    <header className="bg-white shadow-card px-6 py-4">
+      <div className="max-w-7xl mx-auto flex items-center justify-between">
         <div className="flex items-center gap-4">
-          {/* Swig Logo placeholder */}
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-swig-pink rounded-full flex items-center justify-center">
-              <span className="text-white font-bold text-lg">S</span>
+          {/* Swig Logo */}
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 bg-swig-red rounded-full flex items-center justify-center shadow-md">
+              <span className="text-white font-display font-bold text-xl">S</span>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">GM Dashboard</h1>
-              <p className="text-sm text-gray-500">AI-Powered Insights</p>
+              <h1 className="text-xl font-display font-bold text-swig-navy">GM Dashboard</h1>
+              <p className="text-sm text-swig-slate">AI-Powered Insights</p>
             </div>
           </div>
         </div>
@@ -67,7 +67,7 @@ export default function Header({
         <div className="flex items-center gap-6">
           {/* Store Selector */}
           <div className="flex items-center gap-2">
-            <Store className="w-5 h-5 text-gray-500" />
+            <Store className="w-5 h-5 text-swig-slate" />
             <StoreSelector
               stores={stores}
               selectedStore={selectedStore}
@@ -77,15 +77,15 @@ export default function Header({
 
           {/* Date Picker */}
           <div className="flex items-center gap-2">
-            <Calendar className="w-5 h-5 text-gray-500" />
+            <Calendar className="w-5 h-5 text-swig-slate" />
             <div className="flex items-center gap-1">
               <button
                 onClick={() => changeDay(-1)}
                 disabled={!canGoPrev}
-                className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-1.5 rounded-full hover:bg-swig-card disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 title="Previous day"
               >
-                <ChevronLeft className="w-4 h-4 text-gray-600" />
+                <ChevronLeft className="w-4 h-4 text-swig-navy" />
               </button>
 
               <input
@@ -94,26 +94,28 @@ export default function Header({
                 onChange={(e) => onDateChange(e.target.value)}
                 min={minDate}
                 max={maxDate}
-                className="px-2 py-1 border border-gray-300 rounded text-sm font-medium text-gray-700 focus:outline-none focus:ring-2 focus:ring-swig-pink focus:border-transparent"
+                className="px-3 py-1.5 border border-swig-slate-light rounded-lg text-sm font-medium text-swig-navy
+                           focus:outline-none focus:ring-2 focus:ring-swig-red focus:border-transparent
+                           bg-white hover:border-swig-slate transition-colors"
               />
 
               <button
                 onClick={() => changeDay(1)}
                 disabled={!canGoNext}
-                className="p-1 rounded hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                className="p-1.5 rounded-full hover:bg-swig-card disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 title="Next day"
               >
-                <ChevronRight className="w-4 h-4 text-gray-600" />
+                <ChevronRight className="w-4 h-4 text-swig-navy" />
               </button>
             </div>
-            <span className="text-sm text-gray-500 hidden lg:inline">
+            <span className="text-sm text-swig-slate hidden lg:inline">
               {formatDisplayDate(selectedDate)}
             </span>
           </div>
 
           {/* Selected Store Info */}
           {selectedStoreData && (
-            <div className="text-sm text-gray-600 hidden md:block">
+            <div className="text-sm font-medium text-swig-navy hidden md:block">
               {selectedStoreData.city}, {selectedStoreData.state}
             </div>
           )}
