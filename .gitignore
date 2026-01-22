@@ -5,6 +5,9 @@ __pycache__/
 venv/
 .env
 
+# DB
+swig_operations.duckdb
+
 # Node
 node_modules/
 dist/
