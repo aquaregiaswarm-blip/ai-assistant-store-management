@@ -1,4 +1,5 @@
 import { User, Sparkles } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import type { ChatMessage } from '../../types';
 
 interface MessageBubbleProps {
@@ -28,7 +29,13 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
             ? 'bg-swig-pink text-white rounded-br-md'
             : 'bg-gray-100 text-gray-900 rounded-bl-md'
         }`}>
-          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+          {isUser ? (
+            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+          ) : (
+            <div className="text-sm prose prose-sm prose-gray max-w-none">
+              <ReactMarkdown>{message.content}</ReactMarkdown>
+            </div>
+          )}
         </div>
         <p className="text-xs text-gray-400 mt-1 px-1">
           {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
