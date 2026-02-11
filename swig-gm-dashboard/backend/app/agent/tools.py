@@ -1,7 +1,11 @@
 """Tool definitions and implementations for the GM AI Agent."""
 from typing import Any, Dict, List
+from datetime import datetime, timedelta
 from ..database import get_db
 from ..config import settings
+
+# Dataset prefix for BigQuery table references
+DS = f"{settings.gcp_project_id}.{settings.bigquery_dataset}"
 
 
 # Tool definitions for Claude API
@@ -193,38 +197,38 @@ def _query_transactions(db, params: Dict) -> Dict:
     aggregation = params.get("aggregation", "daily")
 
     if aggregation == "daily":
-        result = db.query_one("""
+        result = db.query_one(f"""
             SELECT
                 COUNT(*) as transactions,
                 COALESCE(SUM(Total_Amount), 0) as revenue,
                 COALESCE(AVG(Total_Amount), 0) as avg_ticket,
                 COUNT(DISTINCT Employee_ID) as employees
-            FROM Sales_Transactions_Header
-            WHERE Store_ID = ? AND Business_Date = ? AND Is_Voided = false
-        """, [store_id, date])
+            FROM `{DS}.Sales_Transactions_Header`
+            WHERE Store_ID = @store_id AND Business_Date = @date AND Is_Voided = FALSE
+        """, {"store_id": store_id, "date": date})
         return {
             "date": date,
             "transactions": result["transactions"],
-            "revenue": round(result["revenue"], 2),
-            "avg_ticket": round(result["avg_ticket"], 2),
+            "revenue": round(float(result["revenue"]), 2),
+            "avg_ticket": round(float(result["avg_ticket"]), 2),
             "employees_who_sold": result["employees"]
         }
 
     elif aggregation == "hourly":
-        results = db.query("""
+        results = db.query(f"""
             SELECT
-                EXTRACT(hour FROM Open_Timestamp) as hour,
+                EXTRACT(HOUR FROM Open_Timestamp) as hour,
                 COUNT(*) as transactions,
                 SUM(Total_Amount) as revenue
-            FROM Sales_Transactions_Header
-            WHERE Store_ID = ? AND Business_Date = ? AND Is_Voided = false
-            GROUP BY EXTRACT(hour FROM Open_Timestamp)
+            FROM `{DS}.Sales_Transactions_Header`
+            WHERE Store_ID = @store_id AND Business_Date = @date AND Is_Voided = FALSE
+            GROUP BY EXTRACT(HOUR FROM Open_Timestamp)
             ORDER BY transactions DESC
-        """, [store_id, date])
+        """, {"store_id": store_id, "date": date})
         return {
             "date": date,
             "hourly_breakdown": [
-                {"hour": f"{int(r['hour']):02d}:00", "transactions": r["transactions"], "revenue": round(r["revenue"], 2)}
+                {"hour": f"{int(r['hour']):02d}:00", "transactions": r["transactions"], "revenue": round(float(r["revenue"]), 2)}
                 for r in results
             ],
             "peak_hour": f"{int(results[0]['hour']):02d}:00" if results else None,
@@ -232,16 +236,16 @@ def _query_transactions(db, params: Dict) -> Dict:
         }
 
     elif aggregation == "by_channel":
-        results = db.query("""
+        results = db.query(f"""
             SELECT
                 Service_Channel as channel,
                 COUNT(*) as transactions,
                 SUM(Total_Amount) as revenue
-            FROM Sales_Transactions_Header
-            WHERE Store_ID = ? AND Business_Date = ? AND Is_Voided = false
+            FROM `{DS}.Sales_Transactions_Header`
+            WHERE Store_ID = @store_id AND Business_Date = @date AND Is_Voided = FALSE
             GROUP BY Service_Channel
             ORDER BY transactions DESC
-        """, [store_id, date])
+        """, {"store_id": store_id, "date": date})
         total = sum(r["transactions"] for r in results)
         return {
             "date": date,
@@ -250,26 +254,26 @@ def _query_transactions(db, params: Dict) -> Dict:
                     "channel": r["channel"],
                     "transactions": r["transactions"],
                     "percentage": round(r["transactions"] / total * 100, 1) if total > 0 else 0,
-                    "revenue": round(r["revenue"], 2)
+                    "revenue": round(float(r["revenue"]), 2)
                 }
                 for r in results
             ]
         }
 
     elif aggregation == "by_employee":
-        results = db.query("""
+        results = db.query(f"""
             SELECT
                 e.First_Name,
                 e.Last_Name,
                 e.Role_Code,
                 COUNT(*) as transactions,
                 SUM(t.Total_Amount) as revenue
-            FROM Sales_Transactions_Header t
-            JOIN Employee_Master_Profile e ON t.Employee_ID = e.Employee_ID
-            WHERE t.Store_ID = ? AND t.Business_Date = ? AND t.Is_Voided = false
+            FROM `{DS}.Sales_Transactions_Header` t
+            JOIN `{DS}.Employee_Master_Profile` e ON t.Employee_ID = e.Employee_ID
+            WHERE t.Store_ID = @store_id AND t.Business_Date = @date AND t.Is_Voided = FALSE
             GROUP BY e.Employee_ID, e.First_Name, e.Last_Name, e.Role_Code
             ORDER BY transactions DESC
-        """, [store_id, date])
+        """, {"store_id": store_id, "date": date})
         return {
             "date": date,
             "by_employee": [
@@ -277,7 +281,7 @@ def _query_transactions(db, params: Dict) -> Dict:
                     "name": f"{r['First_Name']} {r['Last_Name']}",
                     "role": r["Role_Code"],
                     "transactions": r["transactions"],
-                    "revenue": round(r["revenue"], 2)
+                    "revenue": round(float(r["revenue"]), 2)
                 }
                 for r in results
             ]
@@ -293,15 +297,15 @@ def _query_workforce(db, params: Dict) -> Dict:
     date = params["date"]
 
     if query_type == "schedule_today":
-        results = db.query("""
+        results = db.query(f"""
             SELECT
                 e.First_Name, e.Last_Name, e.Role_Code, e.Is_Minor,
                 s.Shift_Start, s.Shift_End, s.Scheduled_Hours
-            FROM Labor_Schedules_Published s
-            JOIN Employee_Master_Profile e ON s.Employee_ID = e.Employee_ID
-            WHERE s.Store_ID = ? AND s.Shift_Date = ?
+            FROM `{DS}.Labor_Schedules_Published` s
+            JOIN `{DS}.Employee_Master_Profile` e ON s.Employee_ID = e.Employee_ID
+            WHERE s.Store_ID = @store_id AND s.Shift_Date = @date
             ORDER BY s.Shift_Start
-        """, [store_id, date])
+        """, {"store_id": store_id, "date": date})
         return {
             "date": date,
             "scheduled_shifts": len(results),
@@ -319,15 +323,15 @@ def _query_workforce(db, params: Dict) -> Dict:
         }
 
     elif query_type == "whos_working":
-        results = db.query("""
+        results = db.query(f"""
             SELECT
                 e.First_Name, e.Last_Name, e.Role_Code, e.Is_Minor,
                 t.Clock_In_Time, t.Actual_Hours, t.Break_Start
-            FROM Time_Attendance_Actuals t
-            JOIN Employee_Master_Profile e ON t.Employee_ID = e.Employee_ID
-            WHERE t.Store_ID = ? AND t.Shift_Date = ? AND t.Is_No_Show = false
+            FROM `{DS}.Time_Attendance_Actuals` t
+            JOIN `{DS}.Employee_Master_Profile` e ON t.Employee_ID = e.Employee_ID
+            WHERE t.Store_ID = @store_id AND t.Shift_Date = @date AND t.Is_No_Show = FALSE
             ORDER BY t.Clock_In_Time
-        """, [store_id, date])
+        """, {"store_id": store_id, "date": date})
         return {
             "date": date,
             "employees_working": len(results),
@@ -345,19 +349,19 @@ def _query_workforce(db, params: Dict) -> Dict:
         }
 
     elif query_type == "attendance":
-        late = db.query("""
+        late = db.query(f"""
             SELECT e.First_Name, e.Last_Name, t.Late_Minutes
-            FROM Time_Attendance_Actuals t
-            JOIN Employee_Master_Profile e ON t.Employee_ID = e.Employee_ID
-            WHERE t.Store_ID = ? AND t.Shift_Date = ? AND t.Is_Late = true
-        """, [store_id, date])
+            FROM `{DS}.Time_Attendance_Actuals` t
+            JOIN `{DS}.Employee_Master_Profile` e ON t.Employee_ID = e.Employee_ID
+            WHERE t.Store_ID = @store_id AND t.Shift_Date = @date AND t.Is_Late = TRUE
+        """, {"store_id": store_id, "date": date})
 
-        no_shows = db.query("""
+        no_shows = db.query(f"""
             SELECT e.First_Name, e.Last_Name
-            FROM Time_Attendance_Actuals t
-            JOIN Employee_Master_Profile e ON t.Employee_ID = e.Employee_ID
-            WHERE t.Store_ID = ? AND t.Shift_Date = ? AND t.Is_No_Show = true
-        """, [store_id, date])
+            FROM `{DS}.Time_Attendance_Actuals` t
+            JOIN `{DS}.Employee_Master_Profile` e ON t.Employee_ID = e.Employee_ID
+            WHERE t.Store_ID = @store_id AND t.Shift_Date = @date AND t.Is_No_Show = TRUE
+        """, {"store_id": store_id, "date": date})
 
         return {
             "date": date,
@@ -368,14 +372,14 @@ def _query_workforce(db, params: Dict) -> Dict:
         }
 
     elif query_type == "minors":
-        results = db.query("""
+        results = db.query(f"""
             SELECT
                 e.First_Name, e.Last_Name,
                 t.Clock_In_Time, t.Actual_Hours, t.Break_Start
-            FROM Time_Attendance_Actuals t
-            JOIN Employee_Master_Profile e ON t.Employee_ID = e.Employee_ID
-            WHERE t.Store_ID = ? AND t.Shift_Date = ? AND e.Is_Minor = true AND t.Is_No_Show = false
-        """, [store_id, date])
+            FROM `{DS}.Time_Attendance_Actuals` t
+            JOIN `{DS}.Employee_Master_Profile` e ON t.Employee_ID = e.Employee_ID
+            WHERE t.Store_ID = @store_id AND t.Shift_Date = @date AND e.Is_Minor = TRUE AND t.Is_No_Show = FALSE
+        """, {"store_id": store_id, "date": date})
         return {
             "date": date,
             "minors_working": len(results),
@@ -399,16 +403,20 @@ def _check_compliance(db, params: Dict) -> Dict:
     check_type = params["check_type"]
     date = params["date"]
 
+    violations = []
+    minor_issues = []
+    overtime = []
+
     if check_type == "violations" or check_type == "all":
-        violations = db.query("""
+        violations = db.query(f"""
             SELECT
                 v.Violation_Type, v.Description, v.Penalty_Cost,
                 e.First_Name, e.Last_Name, e.Is_Minor
-            FROM Labor_Compliance_Violations v
-            JOIN Employee_Master_Profile e ON v.Employee_ID = e.Employee_ID
-            WHERE v.Store_ID = ? AND v.Violation_Date = ?
+            FROM `{DS}.Labor_Compliance_Violations` v
+            JOIN `{DS}.Employee_Master_Profile` e ON v.Employee_ID = e.Employee_ID
+            WHERE v.Store_ID = @store_id AND v.Violation_Date = @date
             ORDER BY v.Penalty_Cost DESC
-        """, [store_id, date])
+        """, {"store_id": store_id, "date": date})
 
         if check_type == "violations":
             return {
@@ -428,16 +436,15 @@ def _check_compliance(db, params: Dict) -> Dict:
             }
 
     if check_type == "minor_status" or check_type == "all":
-        minors = db.query("""
+        minors = db.query(f"""
             SELECT
                 e.First_Name, e.Last_Name,
                 t.Actual_Hours, t.Break_Start, t.Clock_Out_Time
-            FROM Time_Attendance_Actuals t
-            JOIN Employee_Master_Profile e ON t.Employee_ID = e.Employee_ID
-            WHERE t.Store_ID = ? AND t.Shift_Date = ? AND e.Is_Minor = true AND t.Is_No_Show = false
-        """, [store_id, date])
+            FROM `{DS}.Time_Attendance_Actuals` t
+            JOIN `{DS}.Employee_Master_Profile` e ON t.Employee_ID = e.Employee_ID
+            WHERE t.Store_ID = @store_id AND t.Shift_Date = @date AND e.Is_Minor = TRUE AND t.Is_No_Show = FALSE
+        """, {"store_id": store_id, "date": date})
 
-        minor_issues = []
         for m in minors:
             hours = float(m["Actual_Hours"]) if m["Actual_Hours"] else 0
             needs_break = hours >= 3.5 and m["Break_Start"] is None
@@ -456,18 +463,21 @@ def _check_compliance(db, params: Dict) -> Dict:
             }
 
     if check_type == "overtime_risk" or check_type == "all":
-        week_start = db.query_scalar(f"SELECT DATE_TRUNC('week', DATE '{date}')")
-        overtime = db.query("""
+        # Calculate week start using Python
+        dt = datetime.strptime(date, "%Y-%m-%d")
+        week_start = (dt - timedelta(days=dt.weekday())).strftime("%Y-%m-%d")
+
+        overtime = db.query(f"""
             SELECT
                 e.First_Name, e.Last_Name,
                 SUM(t.Actual_Hours) as week_hours
-            FROM Time_Attendance_Actuals t
-            JOIN Employee_Master_Profile e ON t.Employee_ID = e.Employee_ID
-            WHERE e.Store_ID = ? AND t.Shift_Date BETWEEN ? AND ?
+            FROM `{DS}.Time_Attendance_Actuals` t
+            JOIN `{DS}.Employee_Master_Profile` e ON t.Employee_ID = e.Employee_ID
+            WHERE e.Store_ID = @store_id AND t.Shift_Date BETWEEN @week_start AND @date
             GROUP BY e.Employee_ID, e.First_Name, e.Last_Name
             HAVING SUM(t.Actual_Hours) >= 35
             ORDER BY SUM(t.Actual_Hours) DESC
-        """, [store_id, str(week_start)[:10], date])
+        """, {"store_id": store_id, "week_start": week_start, "date": date})
 
         if check_type == "overtime_risk":
             return {
@@ -476,8 +486,8 @@ def _check_compliance(db, params: Dict) -> Dict:
                 "overtime_risks": [
                     {
                         "name": f"{o['First_Name']} {o['Last_Name']}",
-                        "week_hours": round(o["week_hours"], 1),
-                        "hours_until_overtime": max(0, round(40 - o["week_hours"], 1))
+                        "week_hours": round(float(o["week_hours"]), 1),
+                        "hours_until_overtime": max(0, round(40 - float(o["week_hours"]), 1))
                     }
                     for o in overtime
                 ]
@@ -492,7 +502,7 @@ def _check_compliance(db, params: Dict) -> Dict:
                 "details": [{"employee": f"{v['First_Name']} {v['Last_Name']}", "type": v["Violation_Type"]} for v in violations]
             },
             "minor_issues": minor_issues,
-            "overtime_risks": [{"name": f"{o['First_Name']} {o['Last_Name']}", "hours": round(o["week_hours"], 1)} for o in overtime]
+            "overtime_risks": [{"name": f"{o['First_Name']} {o['Last_Name']}", "hours": round(float(o["week_hours"]), 1)} for o in overtime]
         }
 
     return {"error": "Invalid check type"}
@@ -505,24 +515,24 @@ def _compare_performance(db, params: Dict) -> Dict:
     comparison = params["comparison"]
 
     def get_stats(d):
-        return db.query_one("""
+        return db.query_one(f"""
             SELECT COUNT(*) as transactions, COALESCE(SUM(Total_Amount), 0) as revenue
-            FROM Sales_Transactions_Header
-            WHERE Store_ID = ? AND Business_Date = ? AND Is_Voided = false
-        """, [store_id, d])
+            FROM `{DS}.Sales_Transactions_Header`
+            WHERE Store_ID = @store_id AND Business_Date = @date AND Is_Voided = FALSE
+        """, {"store_id": store_id, "date": d})
 
     current = get_stats(date)
 
+    # Calculate compare date using Python
+    dt = datetime.strptime(date, "%Y-%m-%d")
     if comparison == "yesterday":
-        compare_date = db.query_scalar(f"SELECT DATE '{date}' - INTERVAL 1 DAY")
-    elif comparison == "last_week":
-        compare_date = db.query_scalar(f"SELECT DATE '{date}' - INTERVAL 7 DAY")
-    elif comparison == "same_day_last_week":
-        compare_date = db.query_scalar(f"SELECT DATE '{date}' - INTERVAL 7 DAY")
+        compare_date = (dt - timedelta(days=1)).strftime("%Y-%m-%d")
+    elif comparison == "last_week" or comparison == "same_day_last_week":
+        compare_date = (dt - timedelta(days=7)).strftime("%Y-%m-%d")
     else:
         return {"error": "Invalid comparison type"}
 
-    compare = get_stats(str(compare_date)[:10])
+    compare = get_stats(compare_date)
 
     def calc_change(curr, prev):
         if prev and prev > 0:
@@ -531,19 +541,19 @@ def _compare_performance(db, params: Dict) -> Dict:
 
     return {
         "current_date": date,
-        "compare_date": str(compare_date)[:10],
+        "compare_date": compare_date,
         "comparison_type": comparison,
         "current": {
             "transactions": current["transactions"],
-            "revenue": round(current["revenue"], 2)
+            "revenue": round(float(current["revenue"]), 2)
         },
         "comparison": {
             "transactions": compare["transactions"],
-            "revenue": round(compare["revenue"], 2)
+            "revenue": round(float(compare["revenue"]), 2)
         },
         "change": {
             "transactions": calc_change(current["transactions"], compare["transactions"]),
-            "revenue": calc_change(current["revenue"], compare["revenue"])
+            "revenue": calc_change(float(current["revenue"]), float(compare["revenue"]))
         }
     }
 
@@ -556,19 +566,19 @@ def _get_top_items(db, params: Dict) -> Dict:
     item_type = params.get("item_type", "all")
 
     type_filter = ""
-    query_params = [store_id, date]
+    query_params = {"store_id": store_id, "date": date}
     if item_type and item_type != "all":
-        type_filter = "AND li.Item_Type = ?"
-        query_params.append(item_type)
+        type_filter = "AND li.Item_Type = @item_type"
+        query_params["item_type"] = item_type
 
     results = db.query(f"""
         SELECT
             li.Item_Name, li.Item_Type,
             COUNT(*) as quantity,
             SUM(li.Unit_Price * li.Quantity) as revenue
-        FROM Sales_Order_Line_Items li
-        JOIN Sales_Transactions_Header t ON li.Transaction_UUID = t.Transaction_UUID
-        WHERE t.Store_ID = ? AND t.Business_Date = ? AND t.Is_Voided = false {type_filter}
+        FROM `{DS}.Sales_Order_Line_Items` li
+        JOIN `{DS}.Sales_Transactions_Header` t ON li.Transaction_UUID = t.Transaction_UUID
+        WHERE t.Store_ID = @store_id AND t.Business_Date = @date AND t.Is_Voided = FALSE {type_filter}
         GROUP BY li.Item_Name, li.Item_Type
         ORDER BY quantity DESC
         LIMIT {limit}
@@ -583,7 +593,7 @@ def _get_top_items(db, params: Dict) -> Dict:
                 "item": r["Item_Name"],
                 "type": r["Item_Type"],
                 "quantity": r["quantity"],
-                "revenue": round(r["revenue"], 2)
+                "revenue": round(float(r["revenue"]), 2)
             }
             for i, r in enumerate(results)
         ]
@@ -596,43 +606,43 @@ def _analyze_linebuster(db, params: Dict) -> Dict:
     date = params["date"]
 
     # Queue position by employee
-    by_employee = db.query("""
+    by_employee = db.query(f"""
         SELECT
             e.First_Name, e.Last_Name,
             AVG(t.Queue_Position) as avg_position,
             COUNT(*) as orders
-        FROM Sales_Transactions_Header t
-        JOIN Employee_Master_Profile e ON t.Employee_ID = e.Employee_ID
-        WHERE t.Store_ID = ? AND t.Business_Date = ?
+        FROM `{DS}.Sales_Transactions_Header` t
+        JOIN `{DS}.Employee_Master_Profile` e ON t.Employee_ID = e.Employee_ID
+        WHERE t.Store_ID = @store_id AND t.Business_Date = @date
           AND t.Service_Channel = 'Drive_Thru'
           AND t.Queue_Position IS NOT NULL
         GROUP BY e.Employee_ID, e.First_Name, e.Last_Name
         HAVING COUNT(*) >= 10
         ORDER BY avg_position DESC
-    """, [store_id, date])
+    """, {"store_id": store_id, "date": date})
 
     # Overall stats
-    stats = db.query_one("""
+    stats = db.query_one(f"""
         SELECT
             AVG(Queue_Position) as avg_position,
             COUNT(*) as total_drive_thru,
             SUM(CASE WHEN Queue_Position > 2 THEN 1 ELSE 0 END) as linebuster_orders
-        FROM Sales_Transactions_Header
-        WHERE Store_ID = ? AND Business_Date = ?
+        FROM `{DS}.Sales_Transactions_Header`
+        WHERE Store_ID = @store_id AND Business_Date = @date
           AND Service_Channel = 'Drive_Thru'
           AND Queue_Position IS NOT NULL
-    """, [store_id, date])
+    """, {"store_id": store_id, "date": date})
 
     return {
         "date": date,
         "total_drive_thru_orders": stats["total_drive_thru"],
         "linebuster_orders": stats["linebuster_orders"],
         "linebuster_percentage": round(stats["linebuster_orders"] / stats["total_drive_thru"] * 100, 1) if stats["total_drive_thru"] > 0 else 0,
-        "avg_queue_position": round(stats["avg_position"], 1) if stats["avg_position"] else 0,
+        "avg_queue_position": round(float(stats["avg_position"]), 1) if stats["avg_position"] else 0,
         "by_employee": [
             {
                 "name": f"{r['First_Name']} {r['Last_Name']}",
-                "avg_queue_position": round(r["avg_position"], 1),
+                "avg_queue_position": round(float(r["avg_position"]), 1),
                 "orders": r["orders"]
             }
             for r in by_employee
@@ -646,17 +656,17 @@ def _get_peak_hours(db, params: Dict) -> Dict:
     store_id = params["store_id"]
     date = params["date"]
 
-    results = db.query("""
+    results = db.query(f"""
         SELECT
-            EXTRACT(hour FROM Open_Timestamp) as hour,
+            EXTRACT(HOUR FROM Open_Timestamp) as hour,
             COUNT(*) as transactions,
             SUM(Total_Amount) as revenue,
             AVG(Queue_Position) as avg_queue
-        FROM Sales_Transactions_Header
-        WHERE Store_ID = ? AND Business_Date = ? AND Is_Voided = false
-        GROUP BY EXTRACT(hour FROM Open_Timestamp)
+        FROM `{DS}.Sales_Transactions_Header`
+        WHERE Store_ID = @store_id AND Business_Date = @date AND Is_Voided = FALSE
+        GROUP BY EXTRACT(HOUR FROM Open_Timestamp)
         ORDER BY transactions DESC
-    """, [store_id, date])
+    """, {"store_id": store_id, "date": date})
 
     peak = results[0] if results else None
 
@@ -664,12 +674,12 @@ def _get_peak_hours(db, params: Dict) -> Dict:
         "date": date,
         "peak_hour": f"{int(peak['hour']):02d}:00 - {int(peak['hour'])+1:02d}:00" if peak else None,
         "peak_transactions": peak["transactions"] if peak else 0,
-        "peak_revenue": round(peak["revenue"], 2) if peak else 0,
+        "peak_revenue": round(float(peak["revenue"]), 2) if peak else 0,
         "hourly_breakdown": [
             {
                 "hour": f"{int(r['hour']):02d}:00",
                 "transactions": r["transactions"],
-                "revenue": round(r["revenue"], 2),
+                "revenue": round(float(r["revenue"]), 2),
                 "is_peak": r == peak
             }
             for r in sorted(results, key=lambda x: x["hour"])

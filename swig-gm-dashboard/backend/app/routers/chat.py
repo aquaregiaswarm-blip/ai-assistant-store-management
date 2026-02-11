@@ -8,8 +8,12 @@ import uuid
 
 from ..agent.gm_agent import get_or_create_agent, clear_session
 from ..database import get_db
+from ..config import settings
 
 router = APIRouter(prefix="/chat", tags=["chat"])
+
+# Dataset prefix for BigQuery table references
+DS = f"{settings.gcp_project_id}.{settings.bigquery_dataset}"
 
 
 class ChatRequest(BaseModel):
@@ -31,8 +35,8 @@ async def chat(request: ChatRequest):
     # Get store name
     db = get_db()
     store = db.query_one(
-        "SELECT Store_Name FROM Organization_Stores WHERE Store_ID = ?",
-        [request.store_id]
+        f"SELECT Store_Name FROM `{DS}.Organization_Stores` WHERE Store_ID = @store_id",
+        {"store_id": request.store_id}
     )
 
     if not store:
@@ -60,8 +64,8 @@ async def chat_stream(request: ChatRequest):
     # Get store name
     db = get_db()
     store = db.query_one(
-        "SELECT Store_Name FROM Organization_Stores WHERE Store_ID = ?",
-        [request.store_id]
+        f"SELECT Store_Name FROM `{DS}.Organization_Stores` WHERE Store_ID = @store_id",
+        {"store_id": request.store_id}
     )
 
     if not store:

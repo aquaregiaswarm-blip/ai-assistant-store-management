@@ -6,6 +6,9 @@ from ..config import settings
 
 router = APIRouter(prefix="/weekly", tags=["weekly"])
 
+# Dataset prefix for BigQuery table references
+DS = f"{settings.gcp_project_id}.{settings.bigquery_dataset}"
+
 
 def get_week_bounds(target_date: str):
     """Get Monday-Sunday bounds for the week containing target_date."""
@@ -28,7 +31,7 @@ async def get_weekly_summary(
     week_start, week_end = get_week_bounds(target_date)
 
     # Transaction metrics
-    tx_stats = db.query_one("""
+    tx_stats = db.query_one(f"""
         SELECT
             COUNT(*) as transaction_count,
             COALESCE(SUM(Total_Amount), 0) as total_revenue,
@@ -36,51 +39,51 @@ async def get_weekly_summary(
             COUNT(DISTINCT Business_Date) as days_with_sales,
             COUNT(DISTINCT Employee_ID) as unique_employees,
             SUM(CASE WHEN Customer_Loyalty_ID IS NOT NULL THEN 1 ELSE 0 END) as loyalty_transactions
-        FROM Sales_Transactions_Header
-        WHERE Store_ID = ?
-          AND Business_Date BETWEEN ? AND ?
-          AND Is_Voided = false
-    """, [store_id, week_start, week_end])
+        FROM `{DS}.Sales_Transactions_Header`
+        WHERE Store_ID = @store_id
+          AND Business_Date BETWEEN @week_start AND @week_end
+          AND Is_Voided = FALSE
+    """, {"store_id": store_id, "week_start": week_start, "week_end": week_end})
 
     # Labor metrics
-    labor = db.query_one("""
+    labor = db.query_one(f"""
         SELECT
             COALESCE(SUM(t.Actual_Hours), 0) as total_hours,
             COALESCE(SUM(t.Actual_Hours * e.Hourly_Wage), 0) as total_labor_cost,
             COUNT(DISTINCT t.Employee_ID) as employees_worked
-        FROM Time_Attendance_Actuals t
-        JOIN Employee_Master_Profile e ON t.Employee_ID = e.Employee_ID
-        WHERE t.Store_ID = ?
-          AND t.Shift_Date BETWEEN ? AND ?
-    """, [store_id, week_start, week_end])
+        FROM `{DS}.Time_Attendance_Actuals` t
+        JOIN `{DS}.Employee_Master_Profile` e ON t.Employee_ID = e.Employee_ID
+        WHERE t.Store_ID = @store_id
+          AND t.Shift_Date BETWEEN @week_start AND @week_end
+    """, {"store_id": store_id, "week_start": week_start, "week_end": week_end})
 
     # Compliance violations
-    violations = db.query_one("""
+    violations = db.query_one(f"""
         SELECT
             COUNT(*) as violation_count,
             COALESCE(SUM(Penalty_Cost), 0) as total_penalties
-        FROM Labor_Compliance_Violations
-        WHERE Store_ID = ?
-          AND Violation_Date BETWEEN ? AND ?
-    """, [store_id, week_start, week_end])
+        FROM `{DS}.Labor_Compliance_Violations`
+        WHERE Store_ID = @store_id
+          AND Violation_Date BETWEEN @week_start AND @week_end
+    """, {"store_id": store_id, "week_start": week_start, "week_end": week_end})
 
     # Top items for the week
-    top_items = db.query("""
+    top_items = db.query(f"""
         SELECT
             li.Item_Name,
             li.Item_Type,
             SUM(li.Quantity) as quantity_sold,
             SUM(li.Line_Total) as revenue
-        FROM Sales_Order_Line_Items li
-        JOIN Sales_Transactions_Header t ON li.Transaction_UUID = t.Transaction_UUID
-        WHERE t.Store_ID = ?
-          AND t.Business_Date BETWEEN ? AND ?
-          AND t.Is_Voided = false
+        FROM `{DS}.Sales_Order_Line_Items` li
+        JOIN `{DS}.Sales_Transactions_Header` t ON li.Transaction_UUID = t.Transaction_UUID
+        WHERE t.Store_ID = @store_id
+          AND t.Business_Date BETWEEN @week_start AND @week_end
+          AND t.Is_Voided = FALSE
           AND li.Item_Type = 'Base_Beverage'
         GROUP BY li.Item_Name, li.Item_Type
         ORDER BY quantity_sold DESC
         LIMIT 5
-    """, [store_id, week_start, week_end])
+    """, {"store_id": store_id, "week_start": week_start, "week_end": week_end})
 
     revenue = float(tx_stats["total_revenue"]) if tx_stats else 0
     labor_cost = float(labor["total_labor_cost"]) if labor else 0
@@ -130,33 +133,33 @@ async def get_weekly_trends(
     week_start, week_end = get_week_bounds(target_date)
 
     # Daily revenue and transactions
-    daily_sales = db.query("""
+    daily_sales = db.query(f"""
         SELECT
             Business_Date,
             COUNT(*) as transactions,
             COALESCE(SUM(Total_Amount), 0) as revenue,
             COALESCE(AVG(Total_Amount), 0) as avg_ticket
-        FROM Sales_Transactions_Header
-        WHERE Store_ID = ?
-          AND Business_Date BETWEEN ? AND ?
-          AND Is_Voided = false
+        FROM `{DS}.Sales_Transactions_Header`
+        WHERE Store_ID = @store_id
+          AND Business_Date BETWEEN @week_start AND @week_end
+          AND Is_Voided = FALSE
         GROUP BY Business_Date
         ORDER BY Business_Date
-    """, [store_id, week_start, week_end])
+    """, {"store_id": store_id, "week_start": week_start, "week_end": week_end})
 
     # Daily labor costs
-    daily_labor = db.query("""
+    daily_labor = db.query(f"""
         SELECT
             t.Shift_Date as date,
             COALESCE(SUM(t.Actual_Hours), 0) as hours,
             COALESCE(SUM(t.Actual_Hours * e.Hourly_Wage), 0) as labor_cost
-        FROM Time_Attendance_Actuals t
-        JOIN Employee_Master_Profile e ON t.Employee_ID = e.Employee_ID
-        WHERE t.Store_ID = ?
-          AND t.Shift_Date BETWEEN ? AND ?
+        FROM `{DS}.Time_Attendance_Actuals` t
+        JOIN `{DS}.Employee_Master_Profile` e ON t.Employee_ID = e.Employee_ID
+        WHERE t.Store_ID = @store_id
+          AND t.Shift_Date BETWEEN @week_start AND @week_end
         GROUP BY t.Shift_Date
         ORDER BY t.Shift_Date
-    """, [store_id, week_start, week_end])
+    """, {"store_id": store_id, "week_start": week_start, "week_end": week_end})
 
     # Create lookup for labor data
     labor_by_date = {str(l["date"])[:10]: l for l in daily_labor}
@@ -204,25 +207,25 @@ async def get_week_over_week(
     prev_start, prev_end = get_week_bounds(prev_date)
 
     def get_week_stats(start: str, end: str):
-        sales = db.query_one("""
+        sales = db.query_one(f"""
             SELECT
                 COUNT(*) as transactions,
                 COALESCE(SUM(Total_Amount), 0) as revenue,
                 COALESCE(AVG(Total_Amount), 0) as avg_ticket
-            FROM Sales_Transactions_Header
-            WHERE Store_ID = ?
-              AND Business_Date BETWEEN ? AND ?
-              AND Is_Voided = false
-        """, [store_id, start, end])
+            FROM `{DS}.Sales_Transactions_Header`
+            WHERE Store_ID = @store_id
+              AND Business_Date BETWEEN @start AND @end
+              AND Is_Voided = FALSE
+        """, {"store_id": store_id, "start": start, "end": end})
 
-        labor = db.query_one("""
+        labor = db.query_one(f"""
             SELECT
                 COALESCE(SUM(t.Actual_Hours * e.Hourly_Wage), 0) as labor_cost
-            FROM Time_Attendance_Actuals t
-            JOIN Employee_Master_Profile e ON t.Employee_ID = e.Employee_ID
-            WHERE t.Store_ID = ?
-              AND t.Shift_Date BETWEEN ? AND ?
-        """, [store_id, start, end])
+            FROM `{DS}.Time_Attendance_Actuals` t
+            JOIN `{DS}.Employee_Master_Profile` e ON t.Employee_ID = e.Employee_ID
+            WHERE t.Store_ID = @store_id
+              AND t.Shift_Date BETWEEN @start AND @end
+        """, {"store_id": store_id, "start": start, "end": end})
 
         return {
             "transactions": sales["transactions"] if sales else 0,
@@ -270,28 +273,28 @@ async def get_weekly_cogs(
     week_start, week_end = get_week_bounds(target_date)
 
     # Get revenue
-    revenue = db.query_one("""
+    revenue = db.query_one(f"""
         SELECT COALESCE(SUM(Total_Amount), 0) as total_revenue
-        FROM Sales_Transactions_Header
-        WHERE Store_ID = ? AND Business_Date BETWEEN ? AND ? AND Is_Voided = false
-    """, [store_id, week_start, week_end])
+        FROM `{DS}.Sales_Transactions_Header`
+        WHERE Store_ID = @store_id AND Business_Date BETWEEN @week_start AND @week_end AND Is_Voided = FALSE
+    """, {"store_id": store_id, "week_start": week_start, "week_end": week_end})
 
     # Get COGS by category
-    cogs = db.query("""
+    cogs = db.query(f"""
         SELECT
             inv.Category,
             SUM(li.Quantity * rbm.Quantity_Required * (1 + rbm.Yield_Loss_Pct) /
                 NULLIF(inv.Conversion_Factor, 0) * inv.Unit_Cost) as category_cost
-        FROM Sales_Order_Line_Items li
-        JOIN Sales_Transactions_Header t ON li.Transaction_UUID = t.Transaction_UUID
-        JOIN Recipe_BOM_Mapping rbm ON li.Item_SKU = rbm.Sales_Item_SKU
-        JOIN Inventory_Item_Master inv ON rbm.Inventory_ID = inv.Inventory_ID
-        WHERE t.Store_ID = ?
-          AND t.Business_Date BETWEEN ? AND ?
-          AND t.Is_Voided = false
+        FROM `{DS}.Sales_Order_Line_Items` li
+        JOIN `{DS}.Sales_Transactions_Header` t ON li.Transaction_UUID = t.Transaction_UUID
+        JOIN `{DS}.Recipe_BOM_Mapping` rbm ON li.Item_SKU = rbm.Sales_Item_SKU
+        JOIN `{DS}.Inventory_Item_Master` inv ON rbm.Inventory_ID = inv.Inventory_ID
+        WHERE t.Store_ID = @store_id
+          AND t.Business_Date BETWEEN @week_start AND @week_end
+          AND t.Is_Voided = FALSE
         GROUP BY inv.Category
         ORDER BY category_cost DESC
-    """, [store_id, week_start, week_end])
+    """, {"store_id": store_id, "week_start": week_start, "week_end": week_end})
 
     total_cogs = sum(float(c["category_cost"] or 0) for c in cogs)
     total_rev = float(revenue["total_revenue"]) if revenue else 0

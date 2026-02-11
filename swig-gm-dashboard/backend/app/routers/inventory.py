@@ -6,6 +6,9 @@ from ..config import settings
 
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 
+# Dataset prefix for BigQuery table references
+DS = f"{settings.gcp_project_id}.{settings.bigquery_dataset}"
+
 
 @router.get("/daily-usage")
 async def get_daily_usage(
@@ -16,7 +19,7 @@ async def get_daily_usage(
     db = get_db()
     target_date = date or settings.data_current_date
 
-    results = db.query("""
+    results = db.query(f"""
         SELECT
             inv.Inventory_ID,
             inv.Description as ingredient_name,
@@ -26,17 +29,17 @@ async def get_daily_usage(
             inv.Count_UOM,
             inv.Conversion_Factor,
             SUM(li.Quantity * rbm.Quantity_Required * (1 + rbm.Yield_Loss_Pct)) as total_quantity_used
-        FROM Sales_Order_Line_Items li
-        JOIN Sales_Transactions_Header t ON li.Transaction_UUID = t.Transaction_UUID
-        JOIN Recipe_BOM_Mapping rbm ON li.Item_SKU = rbm.Sales_Item_SKU
-        JOIN Inventory_Item_Master inv ON rbm.Inventory_ID = inv.Inventory_ID
-        WHERE t.Store_ID = ?
-          AND t.Business_Date = ?
-          AND t.Is_Voided = false
+        FROM `{DS}.Sales_Order_Line_Items` li
+        JOIN `{DS}.Sales_Transactions_Header` t ON li.Transaction_UUID = t.Transaction_UUID
+        JOIN `{DS}.Recipe_BOM_Mapping` rbm ON li.Item_SKU = rbm.Sales_Item_SKU
+        JOIN `{DS}.Inventory_Item_Master` inv ON rbm.Inventory_ID = inv.Inventory_ID
+        WHERE t.Store_ID = @store_id
+          AND t.Business_Date = @target_date
+          AND t.Is_Voided = FALSE
         GROUP BY inv.Inventory_ID, inv.Description, inv.Category, inv.Recipe_UOM,
                  inv.Unit_Cost, inv.Count_UOM, inv.Conversion_Factor
         ORDER BY total_quantity_used DESC
-    """, [store_id, target_date])
+    """, {"store_id": store_id, "target_date": target_date})
 
     usage_list = []
     for r in results:
@@ -67,28 +70,28 @@ async def get_cogs_summary(
     target_date = date or settings.data_current_date
 
     # Get total revenue
-    revenue = db.query_one("""
+    revenue = db.query_one(f"""
         SELECT COALESCE(SUM(Total_Amount), 0) as total_revenue
-        FROM Sales_Transactions_Header
-        WHERE Store_ID = ? AND Business_Date = ? AND Is_Voided = false
-    """, [store_id, target_date])
+        FROM `{DS}.Sales_Transactions_Header`
+        WHERE Store_ID = @store_id AND Business_Date = @target_date AND Is_Voided = FALSE
+    """, {"store_id": store_id, "target_date": target_date})
 
     # Get COGS by category
-    cogs_by_category = db.query("""
+    cogs_by_category = db.query(f"""
         SELECT
             inv.Category,
             SUM(li.Quantity * rbm.Quantity_Required * (1 + rbm.Yield_Loss_Pct) /
                 NULLIF(inv.Conversion_Factor, 0) * inv.Unit_Cost) as category_cost
-        FROM Sales_Order_Line_Items li
-        JOIN Sales_Transactions_Header t ON li.Transaction_UUID = t.Transaction_UUID
-        JOIN Recipe_BOM_Mapping rbm ON li.Item_SKU = rbm.Sales_Item_SKU
-        JOIN Inventory_Item_Master inv ON rbm.Inventory_ID = inv.Inventory_ID
-        WHERE t.Store_ID = ?
-          AND t.Business_Date = ?
-          AND t.Is_Voided = false
+        FROM `{DS}.Sales_Order_Line_Items` li
+        JOIN `{DS}.Sales_Transactions_Header` t ON li.Transaction_UUID = t.Transaction_UUID
+        JOIN `{DS}.Recipe_BOM_Mapping` rbm ON li.Item_SKU = rbm.Sales_Item_SKU
+        JOIN `{DS}.Inventory_Item_Master` inv ON rbm.Inventory_ID = inv.Inventory_ID
+        WHERE t.Store_ID = @store_id
+          AND t.Business_Date = @target_date
+          AND t.Is_Voided = FALSE
         GROUP BY inv.Category
         ORDER BY category_cost DESC
-    """, [store_id, target_date])
+    """, {"store_id": store_id, "target_date": target_date})
 
     total_cogs = sum(float(c["category_cost"] or 0) for c in cogs_by_category)
     total_rev = float(revenue["total_revenue"]) if revenue else 0
@@ -122,45 +125,45 @@ async def get_usage_by_category(
     target_date = date or settings.data_current_date
 
     # Get totals by category
-    categories = db.query("""
+    categories = db.query(f"""
         SELECT
             inv.Category,
             COUNT(DISTINCT inv.Inventory_ID) as item_count,
             SUM(li.Quantity * rbm.Quantity_Required * (1 + rbm.Yield_Loss_Pct) /
                 NULLIF(inv.Conversion_Factor, 0) * inv.Unit_Cost) as total_cost
-        FROM Sales_Order_Line_Items li
-        JOIN Sales_Transactions_Header t ON li.Transaction_UUID = t.Transaction_UUID
-        JOIN Recipe_BOM_Mapping rbm ON li.Item_SKU = rbm.Sales_Item_SKU
-        JOIN Inventory_Item_Master inv ON rbm.Inventory_ID = inv.Inventory_ID
-        WHERE t.Store_ID = ?
-          AND t.Business_Date = ?
-          AND t.Is_Voided = false
+        FROM `{DS}.Sales_Order_Line_Items` li
+        JOIN `{DS}.Sales_Transactions_Header` t ON li.Transaction_UUID = t.Transaction_UUID
+        JOIN `{DS}.Recipe_BOM_Mapping` rbm ON li.Item_SKU = rbm.Sales_Item_SKU
+        JOIN `{DS}.Inventory_Item_Master` inv ON rbm.Inventory_ID = inv.Inventory_ID
+        WHERE t.Store_ID = @store_id
+          AND t.Business_Date = @target_date
+          AND t.Is_Voided = FALSE
         GROUP BY inv.Category
         ORDER BY total_cost DESC
-    """, [store_id, target_date])
+    """, {"store_id": store_id, "target_date": target_date})
 
     # Get top items per category
     result = []
     for cat in categories:
-        items = db.query("""
+        items = db.query(f"""
             SELECT
                 inv.Description as ingredient_name,
                 inv.Recipe_UOM as unit,
                 SUM(li.Quantity * rbm.Quantity_Required * (1 + rbm.Yield_Loss_Pct)) as quantity_used,
                 SUM(li.Quantity * rbm.Quantity_Required * (1 + rbm.Yield_Loss_Pct) /
                     NULLIF(inv.Conversion_Factor, 0) * inv.Unit_Cost) as cost
-            FROM Sales_Order_Line_Items li
-            JOIN Sales_Transactions_Header t ON li.Transaction_UUID = t.Transaction_UUID
-            JOIN Recipe_BOM_Mapping rbm ON li.Item_SKU = rbm.Sales_Item_SKU
-            JOIN Inventory_Item_Master inv ON rbm.Inventory_ID = inv.Inventory_ID
-            WHERE t.Store_ID = ?
-              AND t.Business_Date = ?
-              AND t.Is_Voided = false
-              AND inv.Category = ?
+            FROM `{DS}.Sales_Order_Line_Items` li
+            JOIN `{DS}.Sales_Transactions_Header` t ON li.Transaction_UUID = t.Transaction_UUID
+            JOIN `{DS}.Recipe_BOM_Mapping` rbm ON li.Item_SKU = rbm.Sales_Item_SKU
+            JOIN `{DS}.Inventory_Item_Master` inv ON rbm.Inventory_ID = inv.Inventory_ID
+            WHERE t.Store_ID = @store_id
+              AND t.Business_Date = @target_date
+              AND t.Is_Voided = FALSE
+              AND inv.Category = @category
             GROUP BY inv.Description, inv.Recipe_UOM
             ORDER BY cost DESC
             LIMIT 5
-        """, [store_id, target_date, cat["Category"]])
+        """, {"store_id": store_id, "target_date": target_date, "category": cat["Category"]})
 
         result.append({
             "category": cat["Category"],
@@ -198,17 +201,17 @@ async def get_top_cost_items(
             SUM(li.Quantity * rbm.Quantity_Required * (1 + rbm.Yield_Loss_Pct)) as quantity_used,
             SUM(li.Quantity * rbm.Quantity_Required * (1 + rbm.Yield_Loss_Pct) /
                 NULLIF(inv.Conversion_Factor, 0) * inv.Unit_Cost) as total_cost
-        FROM Sales_Order_Line_Items li
-        JOIN Sales_Transactions_Header t ON li.Transaction_UUID = t.Transaction_UUID
-        JOIN Recipe_BOM_Mapping rbm ON li.Item_SKU = rbm.Sales_Item_SKU
-        JOIN Inventory_Item_Master inv ON rbm.Inventory_ID = inv.Inventory_ID
-        WHERE t.Store_ID = ?
-          AND t.Business_Date = ?
-          AND t.Is_Voided = false
+        FROM `{DS}.Sales_Order_Line_Items` li
+        JOIN `{DS}.Sales_Transactions_Header` t ON li.Transaction_UUID = t.Transaction_UUID
+        JOIN `{DS}.Recipe_BOM_Mapping` rbm ON li.Item_SKU = rbm.Sales_Item_SKU
+        JOIN `{DS}.Inventory_Item_Master` inv ON rbm.Inventory_ID = inv.Inventory_ID
+        WHERE t.Store_ID = @store_id
+          AND t.Business_Date = @target_date
+          AND t.Is_Voided = FALSE
         GROUP BY inv.Description, inv.Category, inv.Recipe_UOM
         ORDER BY total_cost DESC
         LIMIT {limit}
-    """, [store_id, target_date])
+    """, {"store_id": store_id, "target_date": target_date})
 
     return [
         {

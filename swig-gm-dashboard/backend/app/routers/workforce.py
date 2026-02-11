@@ -1,10 +1,14 @@
 """Workforce and labor management endpoints."""
 from fastapi import APIRouter, Query
+from datetime import datetime, timedelta
 from typing import Optional
 from ..database import get_db
 from ..config import settings
 
 router = APIRouter(prefix="/workforce", tags=["workforce"])
+
+# Dataset prefix for BigQuery table references
+DS = f"{settings.gcp_project_id}.{settings.bigquery_dataset}"
 
 
 @router.get("/schedule/today")
@@ -16,7 +20,7 @@ async def get_todays_schedule(
     db = get_db()
     target_date = date or settings.data_current_date
 
-    results = db.query("""
+    results = db.query(f"""
         SELECT
             s.Schedule_UUID,
             s.Employee_ID,
@@ -28,11 +32,11 @@ async def get_todays_schedule(
             s.Shift_End,
             s.Scheduled_Hours,
             s.Job_Role
-        FROM Labor_Schedules_Published s
-        JOIN Employee_Master_Profile e ON s.Employee_ID = e.Employee_ID
-        WHERE s.Store_ID = ? AND s.Shift_Date = ?
+        FROM `{DS}.Labor_Schedules_Published` s
+        JOIN `{DS}.Employee_Master_Profile` e ON s.Employee_ID = e.Employee_ID
+        WHERE s.Store_ID = @store_id AND s.Shift_Date = @target_date
         ORDER BY s.Shift_Start
-    """, [store_id, target_date])
+    """, {"store_id": store_id, "target_date": target_date})
 
     return [
         {
@@ -59,7 +63,7 @@ async def get_whos_working(
     db = get_db()
     target_date = date or settings.data_current_date
 
-    results = db.query("""
+    results = db.query(f"""
         SELECT
             t.Employee_ID,
             e.First_Name,
@@ -74,11 +78,11 @@ async def get_whos_working(
             t.Actual_Hours,
             t.Is_Late,
             t.Late_Minutes
-        FROM Time_Attendance_Actuals t
-        JOIN Employee_Master_Profile e ON t.Employee_ID = e.Employee_ID
-        WHERE t.Store_ID = ? AND t.Shift_Date = ? AND t.Is_No_Show = false
+        FROM `{DS}.Time_Attendance_Actuals` t
+        JOIN `{DS}.Employee_Master_Profile` e ON t.Employee_ID = e.Employee_ID
+        WHERE t.Store_ID = @store_id AND t.Shift_Date = @target_date AND t.Is_No_Show = FALSE
         ORDER BY t.Clock_In_Time
-    """, [store_id, target_date])
+    """, {"store_id": store_id, "target_date": target_date})
 
     return [
         {
@@ -109,15 +113,14 @@ async def get_compliance_violations(
     days_back: int = Query(7, description="Number of days to look back")
 ):
     """Get recent compliance violations."""
-    from datetime import datetime, timedelta
     db = get_db()
     target_date = date or settings.data_current_date
 
-    # Calculate start date in Python since DuckDB doesn't handle parameterized date arithmetic well
+    # Calculate start date in Python
     end_date = datetime.strptime(target_date, "%Y-%m-%d")
     start_date = (end_date - timedelta(days=days_back)).strftime("%Y-%m-%d")
 
-    results = db.query("""
+    results = db.query(f"""
         SELECT
             v.Violation_UUID,
             v.Employee_ID,
@@ -130,12 +133,12 @@ async def get_compliance_violations(
             v.Penalty_Cost,
             v.Manager_Ack,
             v.Resolved
-        FROM Labor_Compliance_Violations v
-        JOIN Employee_Master_Profile e ON v.Employee_ID = e.Employee_ID
-        WHERE v.Store_ID = ?
-          AND v.Violation_Date BETWEEN ? AND ?
+        FROM `{DS}.Labor_Compliance_Violations` v
+        JOIN `{DS}.Employee_Master_Profile` e ON v.Employee_ID = e.Employee_ID
+        WHERE v.Store_ID = @store_id
+          AND v.Violation_Date BETWEEN @start_date AND @end_date
         ORDER BY v.Violation_Date DESC, v.Penalty_Cost DESC
-    """, [store_id, start_date, target_date])
+    """, {"store_id": store_id, "start_date": start_date, "end_date": target_date})
 
     return [
         {
@@ -163,7 +166,7 @@ async def get_minor_status(
     db = get_db()
     target_date = date or settings.data_current_date
 
-    results = db.query("""
+    results = db.query(f"""
         SELECT
             e.Employee_ID,
             e.First_Name,
@@ -175,14 +178,14 @@ async def get_minor_status(
             t.Break_End,
             t.Actual_Hours,
             s.Shift_End
-        FROM Employee_Master_Profile e
-        JOIN Time_Attendance_Actuals t ON e.Employee_ID = t.Employee_ID
-        LEFT JOIN Labor_Schedules_Published s ON t.Schedule_UUID = s.Schedule_UUID
-        WHERE e.Store_ID = ?
-          AND e.Is_Minor = true
-          AND t.Shift_Date = ?
-          AND t.Is_No_Show = false
-    """, [store_id, target_date])
+        FROM `{DS}.Employee_Master_Profile` e
+        JOIN `{DS}.Time_Attendance_Actuals` t ON e.Employee_ID = t.Employee_ID
+        LEFT JOIN `{DS}.Labor_Schedules_Published` s ON t.Schedule_UUID = s.Schedule_UUID
+        WHERE e.Store_ID = @store_id
+          AND e.Is_Minor = TRUE
+          AND t.Shift_Date = @target_date
+          AND t.Is_No_Show = FALSE
+    """, {"store_id": store_id, "target_date": target_date})
 
     minors = []
     for r in results:
@@ -213,7 +216,7 @@ async def get_daily_roster(
     db = get_db()
     target_date = date or settings.data_current_date
 
-    results = db.query("""
+    results = db.query(f"""
         SELECT
             e.Employee_ID,
             e.First_Name,
@@ -236,12 +239,12 @@ async def get_daily_roster(
             t.Is_Late,
             t.Late_Minutes,
             t.Is_No_Show
-        FROM Labor_Schedules_Published s
-        JOIN Employee_Master_Profile e ON s.Employee_ID = e.Employee_ID
-        LEFT JOIN Time_Attendance_Actuals t ON s.Schedule_UUID = t.Schedule_UUID
-        WHERE s.Store_ID = ? AND s.Shift_Date = ?
+        FROM `{DS}.Labor_Schedules_Published` s
+        JOIN `{DS}.Employee_Master_Profile` e ON s.Employee_ID = e.Employee_ID
+        LEFT JOIN `{DS}.Time_Attendance_Actuals` t ON s.Schedule_UUID = t.Schedule_UUID
+        WHERE s.Store_ID = @store_id AND s.Shift_Date = @target_date
         ORDER BY s.Shift_Start, e.Last_Name
-    """, [store_id, target_date])
+    """, {"store_id": store_id, "target_date": target_date})
 
     roster = []
     total_scheduled_hours = 0
@@ -297,15 +300,15 @@ async def get_daily_roster(
         })
 
     # Get violations for these employees
-    violations = db.query("""
+    violations = db.query(f"""
         SELECT
             v.Employee_ID,
             v.Violation_Type,
             v.Description,
             v.Penalty_Cost
-        FROM Labor_Compliance_Violations v
-        WHERE v.Store_ID = ? AND v.Violation_Date = ?
-    """, [store_id, target_date])
+        FROM `{DS}.Labor_Compliance_Violations` v
+        WHERE v.Store_ID = @store_id AND v.Violation_Date = @target_date
+    """, {"store_id": store_id, "target_date": target_date})
 
     violations_by_employee = {}
     for v in violations:
@@ -359,12 +362,11 @@ async def get_overtime_risk(
     db = get_db()
     target_date = date or settings.data_current_date
 
-    # Get week start (Monday)
-    week_start = db.query_scalar(f"""
-        SELECT DATE_TRUNC('week', DATE '{target_date}')
-    """)
+    # Get week start (Monday) using Python
+    dt = datetime.strptime(target_date, "%Y-%m-%d")
+    week_start = (dt - timedelta(days=dt.weekday())).strftime("%Y-%m-%d")
 
-    results = db.query("""
+    results = db.query(f"""
         SELECT
             e.Employee_ID,
             e.First_Name,
@@ -372,24 +374,24 @@ async def get_overtime_risk(
             e.Role_Code,
             e.Hourly_Wage,
             SUM(t.Actual_Hours) as week_hours
-        FROM Employee_Master_Profile e
-        JOIN Time_Attendance_Actuals t ON e.Employee_ID = t.Employee_ID
-        WHERE e.Store_ID = ?
-          AND t.Shift_Date BETWEEN ? AND ?
+        FROM `{DS}.Employee_Master_Profile` e
+        JOIN `{DS}.Time_Attendance_Actuals` t ON e.Employee_ID = t.Employee_ID
+        WHERE e.Store_ID = @store_id
+          AND t.Shift_Date BETWEEN @week_start AND @target_date
         GROUP BY e.Employee_ID, e.First_Name, e.Last_Name, e.Role_Code, e.Hourly_Wage
         HAVING SUM(t.Actual_Hours) >= 30
         ORDER BY SUM(t.Actual_Hours) DESC
-    """, [store_id, str(week_start)[:10], target_date])
+    """, {"store_id": store_id, "week_start": week_start, "target_date": target_date})
 
     return [
         {
             "employee_id": r["Employee_ID"],
             "name": f"{r['First_Name']} {r['Last_Name']}",
             "role": r["Role_Code"],
-            "week_hours": round(r["week_hours"], 1),
-            "hours_until_overtime": max(0, 40 - r["week_hours"]),
-            "overtime_risk": "high" if r["week_hours"] >= 38 else "medium" if r["week_hours"] >= 35 else "low",
-            "projected_overtime_cost": round(max(0, r["week_hours"] - 40) * r["Hourly_Wage"] * 1.5, 2)
+            "week_hours": round(float(r["week_hours"]), 1),
+            "hours_until_overtime": max(0, 40 - float(r["week_hours"])),
+            "overtime_risk": "high" if float(r["week_hours"]) >= 38 else "medium" if float(r["week_hours"]) >= 35 else "low",
+            "projected_overtime_cost": round(max(0, float(r["week_hours"]) - 40) * float(r["Hourly_Wage"]) * 1.5, 2)
         }
         for r in results
     ]
@@ -405,7 +407,7 @@ async def get_attendance_issues(
     target_date = date or settings.data_current_date
 
     # Late arrivals
-    late = db.query("""
+    late = db.query(f"""
         SELECT
             t.Employee_ID,
             e.First_Name,
@@ -414,15 +416,15 @@ async def get_attendance_issues(
             t.Late_Minutes,
             t.Clock_In_Time,
             s.Shift_Start
-        FROM Time_Attendance_Actuals t
-        JOIN Employee_Master_Profile e ON t.Employee_ID = e.Employee_ID
-        LEFT JOIN Labor_Schedules_Published s ON t.Schedule_UUID = s.Schedule_UUID
-        WHERE t.Store_ID = ? AND t.Shift_Date = ? AND t.Is_Late = true
+        FROM `{DS}.Time_Attendance_Actuals` t
+        JOIN `{DS}.Employee_Master_Profile` e ON t.Employee_ID = e.Employee_ID
+        LEFT JOIN `{DS}.Labor_Schedules_Published` s ON t.Schedule_UUID = s.Schedule_UUID
+        WHERE t.Store_ID = @store_id AND t.Shift_Date = @target_date AND t.Is_Late = TRUE
         ORDER BY t.Late_Minutes DESC
-    """, [store_id, target_date])
+    """, {"store_id": store_id, "target_date": target_date})
 
     # No-shows
-    no_shows = db.query("""
+    no_shows = db.query(f"""
         SELECT
             t.Employee_ID,
             e.First_Name,
@@ -430,11 +432,11 @@ async def get_attendance_issues(
             e.Role_Code,
             s.Shift_Start,
             s.Shift_End
-        FROM Time_Attendance_Actuals t
-        JOIN Employee_Master_Profile e ON t.Employee_ID = e.Employee_ID
-        LEFT JOIN Labor_Schedules_Published s ON t.Schedule_UUID = s.Schedule_UUID
-        WHERE t.Store_ID = ? AND t.Shift_Date = ? AND t.Is_No_Show = true
-    """, [store_id, target_date])
+        FROM `{DS}.Time_Attendance_Actuals` t
+        JOIN `{DS}.Employee_Master_Profile` e ON t.Employee_ID = e.Employee_ID
+        LEFT JOIN `{DS}.Labor_Schedules_Published` s ON t.Schedule_UUID = s.Schedule_UUID
+        WHERE t.Store_ID = @store_id AND t.Shift_Date = @target_date AND t.Is_No_Show = TRUE
+    """, {"store_id": store_id, "target_date": target_date})
 
     return {
         "late_arrivals": [
