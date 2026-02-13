@@ -8,19 +8,16 @@ from ..config import settings
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
-# Dataset prefix for BigQuery table references
-DS = f"{settings.gcp_project_id}.{settings.bigquery_dataset}"
-
 
 @router.get("/stores")
 async def get_stores():
     """Get list of all stores."""
     db = get_db()
-    results = db.query(f"""
-        SELECT Store_ID, Store_Name, City, State
-        FROM `{DS}.Organization_Stores`
-        WHERE Is_Active = TRUE
-        ORDER BY Store_ID
+    results = db.query("""
+        SELECT "Store_ID", "Store_Name", "City", "State"
+        FROM "Organization_Stores"
+        WHERE "Is_Active" = true
+        ORDER BY "Store_ID"
     """)
     return [
         {
@@ -43,35 +40,35 @@ async def get_kpis(
     target_date = date or settings.data_current_date
 
     # Get transaction metrics
-    tx_stats = db.query_one(f"""
+    tx_stats = db.query_one("""
         SELECT
             COUNT(*) as transaction_count,
-            COALESCE(SUM(Total_Amount), 0) as total_revenue,
-            COALESCE(AVG(Total_Amount), 0) as avg_ticket,
-            COUNT(DISTINCT Employee_ID) as employees_sold
-        FROM `{DS}.Sales_Transactions_Header`
-        WHERE Store_ID = @store_id AND Business_Date = @target_date AND Is_Voided = FALSE
+            COALESCE(SUM("Total_Amount"), 0) as total_revenue,
+            COALESCE(AVG("Total_Amount"), 0) as avg_ticket,
+            COUNT(DISTINCT "Employee_ID") as employees_sold
+        FROM "Sales_Transactions_Header"
+        WHERE "Store_ID" = %(store_id)s AND "Business_Date" = %(target_date)s AND "Is_Voided" = false
     """, {"store_id": store_id, "target_date": target_date})
 
     # Get drive-thru throughput (peak hour)
-    throughput = db.query_one(f"""
+    throughput = db.query_one("""
         SELECT
-            EXTRACT(HOUR FROM Open_Timestamp) as peak_hour,
+            EXTRACT(HOUR FROM "Open_Timestamp") as peak_hour,
             COUNT(*) as peak_transactions
-        FROM `{DS}.Sales_Transactions_Header`
-        WHERE Store_ID = @store_id AND Business_Date = @target_date AND Service_Channel = 'Drive_Thru'
-        GROUP BY EXTRACT(HOUR FROM Open_Timestamp)
+        FROM "Sales_Transactions_Header"
+        WHERE "Store_ID" = %(store_id)s AND "Business_Date" = %(target_date)s AND "Service_Channel" = 'Drive_Thru'
+        GROUP BY EXTRACT(HOUR FROM "Open_Timestamp")
         ORDER BY COUNT(*) DESC
         LIMIT 1
     """, {"store_id": store_id, "target_date": target_date})
 
     # Get labor cost (simplified - actual hours * wage)
-    labor = db.query_one(f"""
+    labor = db.query_one("""
         SELECT
-            COALESCE(SUM(t.Actual_Hours * e.Hourly_Wage), 0) as labor_cost
-        FROM `{DS}.Time_Attendance_Actuals` t
-        JOIN `{DS}.Employee_Master_Profile` e ON t.Employee_ID = e.Employee_ID
-        WHERE t.Store_ID = @store_id AND t.Shift_Date = @target_date
+            COALESCE(SUM(t."Actual_Hours" * e."Hourly_Wage"), 0) as labor_cost
+        FROM "Time_Attendance_Actuals" t
+        JOIN "Employee_Master_Profile" e ON t."Employee_ID" = e."Employee_ID"
+        WHERE t."Store_ID" = %(store_id)s AND t."Shift_Date" = %(target_date)s
     """, {"store_id": store_id, "target_date": target_date})
 
     labor_cost = labor["labor_cost"] if labor else 0
@@ -84,16 +81,16 @@ async def get_kpis(
     yesterday_str = (end_date - timedelta(days=1)).strftime("%Y-%m-%d")
     last_week_str = (end_date - timedelta(days=7)).strftime("%Y-%m-%d")
 
-    yesterday = db.query_one(f"""
-        SELECT COUNT(*) as transactions, COALESCE(SUM(Total_Amount), 0) as revenue
-        FROM `{DS}.Sales_Transactions_Header`
-        WHERE Store_ID = @store_id AND Business_Date = @target_date AND Is_Voided = FALSE
+    yesterday = db.query_one("""
+        SELECT COUNT(*) as transactions, COALESCE(SUM("Total_Amount"), 0) as revenue
+        FROM "Sales_Transactions_Header"
+        WHERE "Store_ID" = %(store_id)s AND "Business_Date" = %(target_date)s AND "Is_Voided" = false
     """, {"store_id": store_id, "target_date": yesterday_str})
 
-    last_week = db.query_one(f"""
-        SELECT COUNT(*) as transactions, COALESCE(SUM(Total_Amount), 0) as revenue
-        FROM `{DS}.Sales_Transactions_Header`
-        WHERE Store_ID = @store_id AND Business_Date = @target_date AND Is_Voided = FALSE
+    last_week = db.query_one("""
+        SELECT COUNT(*) as transactions, COALESCE(SUM("Total_Amount"), 0) as revenue
+        FROM "Sales_Transactions_Header"
+        WHERE "Store_ID" = %(store_id)s AND "Business_Date" = %(target_date)s AND "Is_Voided" = false
     """, {"store_id": store_id, "target_date": last_week_str})
 
     def calc_change(current, previous):
@@ -129,15 +126,15 @@ async def get_hourly_breakdown(
     db = get_db()
     target_date = date or settings.data_current_date
 
-    results = db.query(f"""
+    results = db.query("""
         SELECT
-            EXTRACT(HOUR FROM Open_Timestamp) as hour,
+            EXTRACT(HOUR FROM "Open_Timestamp") as hour,
             COUNT(*) as transactions,
-            COALESCE(SUM(Total_Amount), 0) as revenue,
-            COALESCE(AVG(Total_Amount), 0) as avg_ticket
-        FROM `{DS}.Sales_Transactions_Header`
-        WHERE Store_ID = @store_id AND Business_Date = @target_date AND Is_Voided = FALSE
-        GROUP BY EXTRACT(HOUR FROM Open_Timestamp)
+            COALESCE(SUM("Total_Amount"), 0) as revenue,
+            COALESCE(AVG("Total_Amount"), 0) as avg_ticket
+        FROM "Sales_Transactions_Header"
+        WHERE "Store_ID" = %(store_id)s AND "Business_Date" = %(target_date)s AND "Is_Voided" = false
+        GROUP BY EXTRACT(HOUR FROM "Open_Timestamp")
         ORDER BY hour
     """, {"store_id": store_id, "target_date": target_date})
 
@@ -168,19 +165,19 @@ async def get_alerts(
     alerts = []
 
     # Check for compliance violations today
-    violations = db.query(f"""
+    violations = db.query("""
         SELECT
-            v.Violation_Type,
-            v.Description,
-            e.First_Name,
-            e.Last_Name,
-            e.Is_Minor
-        FROM `{DS}.Labor_Compliance_Violations` v
-        JOIN `{DS}.Employee_Master_Profile` e ON v.Employee_ID = e.Employee_ID
-        WHERE v.Store_ID = @store_id AND v.Violation_Date = @target_date AND v.Resolved = FALSE
+            v."Violation_Type",
+            v."Description",
+            e."First_Name",
+            e."Last_Name",
+            e."Is_Minor"
+        FROM "Labor_Compliance_Violations" v
+        JOIN "Employee_Master_Profile" e ON v."Employee_ID" = e."Employee_ID"
+        WHERE v."Store_ID" = %(store_id)s AND v."Violation_Date" = %(target_date)s AND v."Resolved" = false
         ORDER BY
-            CASE WHEN e.Is_Minor THEN 0 ELSE 1 END,
-            v.Violation_Date DESC
+            CASE WHEN e."Is_Minor" THEN 0 ELSE 1 END,
+            v."Violation_Date" DESC
         LIMIT 5
     """, {"store_id": store_id, "target_date": target_date})
 
@@ -196,19 +193,19 @@ async def get_alerts(
         })
 
     # Check for minors working long shifts
-    minor_hours = db.query(f"""
+    minor_hours = db.query("""
         SELECT
-            e.First_Name,
-            e.Last_Name,
-            t.Actual_Hours,
-            t.Break_Start
-        FROM `{DS}.Time_Attendance_Actuals` t
-        JOIN `{DS}.Employee_Master_Profile` e ON t.Employee_ID = e.Employee_ID
-        WHERE t.Store_ID = @store_id
-          AND t.Shift_Date = @target_date
-          AND e.Is_Minor = TRUE
-          AND t.Actual_Hours >= 3.5
-          AND t.Break_Start IS NULL
+            e."First_Name",
+            e."Last_Name",
+            t."Actual_Hours",
+            t."Break_Start"
+        FROM "Time_Attendance_Actuals" t
+        JOIN "Employee_Master_Profile" e ON t."Employee_ID" = e."Employee_ID"
+        WHERE t."Store_ID" = %(store_id)s
+          AND t."Shift_Date" = %(target_date)s
+          AND e."Is_Minor" = true
+          AND t."Actual_Hours" >= 3.5
+          AND t."Break_Start" IS NULL
     """, {"store_id": store_id, "target_date": target_date})
 
     for m in minor_hours:
@@ -234,12 +231,12 @@ async def get_comparison(
     target_date = date or settings.data_current_date
 
     def get_day_stats(d: str):
-        return db.query_one(f"""
+        return db.query_one("""
             SELECT
                 COUNT(*) as transactions,
-                COALESCE(SUM(Total_Amount), 0) as revenue
-            FROM `{DS}.Sales_Transactions_Header`
-            WHERE Store_ID = @store_id AND Business_Date = @target_date AND Is_Voided = FALSE
+                COALESCE(SUM("Total_Amount"), 0) as revenue
+            FROM "Sales_Transactions_Header"
+            WHERE "Store_ID" = %(store_id)s AND "Business_Date" = %(target_date)s AND "Is_Voided" = false
         """, {"store_id": store_id, "target_date": d})
 
     today = get_day_stats(target_date)

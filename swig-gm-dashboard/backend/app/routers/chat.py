@@ -12,9 +12,6 @@ from ..config import settings
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
-# Dataset prefix for BigQuery table references
-DS = f"{settings.gcp_project_id}.{settings.bigquery_dataset}"
-
 
 class ChatRequest(BaseModel):
     message: str
@@ -35,7 +32,7 @@ async def chat(request: ChatRequest):
     # Get store name
     db = get_db()
     store = db.query_one(
-        f"SELECT Store_Name FROM `{DS}.Organization_Stores` WHERE Store_ID = @store_id",
+        'SELECT "Store_Name" FROM "Organization_Stores" WHERE "Store_ID" = %(store_id)s',
         {"store_id": request.store_id}
     )
 
@@ -64,7 +61,7 @@ async def chat_stream(request: ChatRequest):
     # Get store name
     db = get_db()
     store = db.query_one(
-        f"SELECT Store_Name FROM `{DS}.Organization_Stores` WHERE Store_ID = @store_id",
+        'SELECT "Store_Name" FROM "Organization_Stores" WHERE "Store_ID" = %(store_id)s',
         {"store_id": request.store_id}
     )
 

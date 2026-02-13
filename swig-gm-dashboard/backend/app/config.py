@@ -6,12 +6,22 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
-    # BigQuery
-    gcp_project_id: str = os.getenv("GCP_PROJECT_ID", "prj-cts-lab-vertex-sandbox")
-    bigquery_dataset: str = os.getenv("BIGQUERY_DATASET", "swig_operations")
+    # PostgreSQL (Cloud SQL)
+    database_url: str = os.getenv(
+        "DATABASE_URL",
+        "postgresql://postgres:swig-postgres-2026@34.74.169.146:5432/swig"
+    )
 
-    # OpenAI API Key
+    # LLM Configuration
+    # Options: "gpt-4o", "gpt-4o-mini", "claude-sonnet-4", "claude-sonnet-4-20250514"
+    llm_model: str = os.getenv("LLM_MODEL", "gpt-4o")
+    
+    # OpenAI API Key (for gpt-* models)
     openai_api_key: str = ""
+
+    # GCP settings for Claude via Vertex AI (for claude-* models)
+    gcp_project_id: str = os.getenv("GCP_PROJECT_ID", "prj-cts-lab-vertex-sandbox")
+    gcp_region: str = os.getenv("GCP_REGION", "us-east5")  # Claude on Vertex requires us-east5
 
     # AWS Bedrock settings (fallback if no OpenAI key)
     aws_region: str = "us-west-2"

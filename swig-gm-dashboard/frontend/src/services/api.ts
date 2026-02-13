@@ -5,7 +5,7 @@ import type {
   WeeklySummary, WeeklyTrends, WeeklyComparison
 } from '../types';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://swig-gm-dashboard-841327020312.us-east1.run.app/api';
 
 // Generic fetch helper
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {

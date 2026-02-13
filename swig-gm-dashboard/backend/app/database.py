@@ -1,81 +1,46 @@
-"""BigQuery database connection and query utilities."""
-from google.cloud import bigquery
+"""PostgreSQL database connection and query utilities."""
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from typing import Any, Dict, List, Optional
+from contextlib import contextmanager
 from .config import settings
 
 
 class Database:
-    """BigQuery connection manager.
+    """PostgreSQL connection manager.
 
-    Provides the same query()/query_one()/query_scalar() interface
-    as the original DuckDB implementation so that router code changes
-    are limited to SQL dialect differences.
+    Provides query()/query_one()/query_scalar() interface for the routers.
+    Uses connection pooling pattern with context manager.
     """
 
     _instance: Optional["Database"] = None
-    _client: Optional[bigquery.Client] = None
 
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    @property
-    def dataset(self) -> str:
-        """Fully-qualified dataset reference."""
-        return f"{settings.gcp_project_id}.{settings.bigquery_dataset}"
-
-    def connect(self) -> bigquery.Client:
-        """Get or create BigQuery client."""
-        if self._client is None:
-            self._client = bigquery.Client(project=settings.gcp_project_id)
-        return self._client
-
-    def _build_job_config(
-        self, params: Optional[Dict[str, Any]]
-    ) -> Optional[bigquery.QueryJobConfig]:
-        """Build a QueryJobConfig with typed parameters."""
-        if not params:
-            return None
-
-        query_params = []
-        for name, value in params.items():
-            if isinstance(value, bool):
-                query_params.append(
-                    bigquery.ScalarQueryParameter(name, "BOOL", value)
-                )
-            elif isinstance(value, int):
-                query_params.append(
-                    bigquery.ScalarQueryParameter(name, "INT64", value)
-                )
-            elif isinstance(value, float):
-                query_params.append(
-                    bigquery.ScalarQueryParameter(name, "FLOAT64", value)
-                )
-            elif isinstance(value, str):
-                query_params.append(
-                    bigquery.ScalarQueryParameter(name, "STRING", value)
-                )
-            else:
-                query_params.append(
-                    bigquery.ScalarQueryParameter(name, "STRING", str(value))
-                )
-
-        config = bigquery.QueryJobConfig(query_parameters=query_params)
-        return config
+    @contextmanager
+    def _get_connection(self):
+        """Get a database connection with automatic cleanup."""
+        conn = psycopg2.connect(settings.database_url)
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     def query(self, sql: str, params: Optional[Dict[str, Any]] = None) -> List[Dict]:
         """Execute a query and return results as list of dicts.
 
         Args:
-            sql: SQL query string using @param_name for parameters.
+            sql: SQL query string using %(param_name)s for parameters.
             params: Dict of parameter name -> value. Example:
                     {"store_id": 1001, "target_date": "2025-01-26"}
         """
-        client = self.connect()
-        job_config = self._build_job_config(params)
-        result = client.query(sql, job_config=job_config).result()
-        return [dict(row) for row in result]
+        with self._get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(sql, params)
+                return [dict(row) for row in cur.fetchall()]
 
     def query_one(
         self, sql: str, params: Optional[Dict[str, Any]] = None
@@ -88,14 +53,11 @@ class Database:
         self, sql: str, params: Optional[Dict[str, Any]] = None
     ) -> Any:
         """Execute a query and return a single scalar value."""
-        client = self.connect()
-        job_config = self._build_job_config(params)
-        result = client.query(sql, job_config=job_config).result()
-        row = next(iter(result), None)
-        if row is None:
-            return None
-        values = list(row.values())
-        return values[0] if values else None
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+                row = cur.fetchone()
+                return row[0] if row else None
 
 
 # Global database instance

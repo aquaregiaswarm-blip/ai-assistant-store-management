@@ -6,9 +6,6 @@ from ..config import settings
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 
-# Dataset prefix for BigQuery table references
-DS = f"{settings.gcp_project_id}.{settings.bigquery_dataset}"
-
 
 @router.get("/summary")
 async def get_transaction_summary(
@@ -21,21 +18,21 @@ async def get_transaction_summary(
     end = end_date or settings.data_current_date
     start = start_date or end  # Default to single day
 
-    return db.query_one(f"""
+    return db.query_one("""
         SELECT
             COUNT(*) as total_transactions,
-            COALESCE(SUM(Total_Amount), 0) as total_revenue,
-            COALESCE(AVG(Total_Amount), 0) as avg_ticket,
-            COUNT(DISTINCT Business_Date) as days,
-            COUNT(DISTINCT Employee_ID) as unique_employees,
-            SUM(CASE WHEN Service_Channel = 'Drive_Thru' THEN 1 ELSE 0 END) as drive_thru_count,
-            SUM(CASE WHEN Service_Channel = 'Walk_Up' THEN 1 ELSE 0 END) as walk_up_count,
-            SUM(CASE WHEN Service_Channel = 'Mobile_Pickup' THEN 1 ELSE 0 END) as mobile_count,
-            SUM(CASE WHEN Customer_Loyalty_ID IS NOT NULL THEN 1 ELSE 0 END) as loyalty_identified
-        FROM `{DS}.Sales_Transactions_Header`
-        WHERE Store_ID = @store_id
-          AND Business_Date BETWEEN @start_date AND @end_date
-          AND Is_Voided = FALSE
+            COALESCE(SUM("Total_Amount"), 0) as total_revenue,
+            COALESCE(AVG("Total_Amount"), 0) as avg_ticket,
+            COUNT(DISTINCT "Business_Date") as days,
+            COUNT(DISTINCT "Employee_ID") as unique_employees,
+            SUM(CASE WHEN "Service_Channel" = 'Drive_Thru' THEN 1 ELSE 0 END) as drive_thru_count,
+            SUM(CASE WHEN "Service_Channel" = 'Walk_Up' THEN 1 ELSE 0 END) as walk_up_count,
+            SUM(CASE WHEN "Service_Channel" = 'Mobile_Pickup' THEN 1 ELSE 0 END) as mobile_count,
+            SUM(CASE WHEN "Customer_Loyalty_ID" IS NOT NULL THEN 1 ELSE 0 END) as loyalty_identified
+        FROM "Sales_Transactions_Header"
+        WHERE "Store_ID" = %(store_id)s
+          AND "Business_Date" BETWEEN %(start_date)s AND %(end_date)s
+          AND "Is_Voided" = false
     """, {"store_id": store_id, "start_date": start, "end_date": end})
 
 
@@ -48,16 +45,16 @@ async def get_peak_hours(
     db = get_db()
     target_date = date or settings.data_current_date
 
-    results = db.query(f"""
+    results = db.query("""
         SELECT
-            EXTRACT(HOUR FROM Open_Timestamp) as hour,
+            EXTRACT(HOUR FROM "Open_Timestamp") as hour,
             COUNT(*) as transactions,
-            SUM(Total_Amount) as revenue,
-            AVG(Total_Amount) as avg_ticket,
-            SUM(CASE WHEN Service_Channel = 'Drive_Thru' THEN 1 ELSE 0 END) as drive_thru
-        FROM `{DS}.Sales_Transactions_Header`
-        WHERE Store_ID = @store_id AND Business_Date = @target_date AND Is_Voided = FALSE
-        GROUP BY EXTRACT(HOUR FROM Open_Timestamp)
+            SUM("Total_Amount") as revenue,
+            AVG("Total_Amount") as avg_ticket,
+            SUM(CASE WHEN "Service_Channel" = 'Drive_Thru' THEN 1 ELSE 0 END) as drive_thru
+        FROM "Sales_Transactions_Header"
+        WHERE "Store_ID" = %(store_id)s AND "Business_Date" = %(target_date)s AND "Is_Voided" = false
+        GROUP BY EXTRACT(HOUR FROM "Open_Timestamp")
         ORDER BY transactions DESC
     """, {"store_id": store_id, "target_date": target_date})
 
@@ -89,22 +86,22 @@ async def get_top_items(
     type_filter = ""
     params = {"store_id": store_id, "target_date": target_date}
     if item_type:
-        type_filter = "AND li.Item_Type = @item_type"
+        type_filter = 'AND li."Item_Type" = %(item_type)s'
         params["item_type"] = item_type
 
     results = db.query(f"""
         SELECT
-            li.Item_Name,
-            li.Item_Type,
+            li."Item_Name",
+            li."Item_Type",
             COUNT(*) as quantity_sold,
-            SUM(li.Unit_Price * li.Quantity) as revenue
-        FROM `{DS}.Sales_Order_Line_Items` li
-        JOIN `{DS}.Sales_Transactions_Header` t ON li.Transaction_UUID = t.Transaction_UUID
-        WHERE t.Store_ID = @store_id
-          AND t.Business_Date = @target_date
-          AND t.Is_Voided = FALSE
+            SUM(li."Unit_Price" * li."Quantity") as revenue
+        FROM "Sales_Order_Line_Items" li
+        JOIN "Sales_Transactions_Header" t ON li."Transaction_UUID" = t."Transaction_UUID"
+        WHERE t."Store_ID" = %(store_id)s
+          AND t."Business_Date" = %(target_date)s
+          AND t."Is_Voided" = false
           {type_filter}
-        GROUP BY li.Item_Name, li.Item_Type
+        GROUP BY li."Item_Name", li."Item_Type"
         ORDER BY quantity_sold DESC
         LIMIT {limit}
     """, params)
@@ -130,15 +127,15 @@ async def get_by_channel(
     db = get_db()
     target_date = date or settings.data_current_date
 
-    results = db.query(f"""
+    results = db.query("""
         SELECT
-            Service_Channel,
+            "Service_Channel",
             COUNT(*) as transactions,
-            SUM(Total_Amount) as revenue,
-            AVG(Total_Amount) as avg_ticket
-        FROM `{DS}.Sales_Transactions_Header`
-        WHERE Store_ID = @store_id AND Business_Date = @target_date AND Is_Voided = FALSE
-        GROUP BY Service_Channel
+            SUM("Total_Amount") as revenue,
+            AVG("Total_Amount") as avg_ticket
+        FROM "Sales_Transactions_Header"
+        WHERE "Store_ID" = %(store_id)s AND "Business_Date" = %(target_date)s AND "Is_Voided" = false
+        GROUP BY "Service_Channel"
         ORDER BY transactions DESC
     """, {"store_id": store_id, "target_date": target_date})
 
@@ -167,95 +164,95 @@ async def get_hourly_detail(
     target_date = date or settings.data_current_date
 
     # Transaction metrics for this hour
-    tx_stats = db.query_one(f"""
+    tx_stats = db.query_one("""
         SELECT
             COUNT(*) as transaction_count,
-            COALESCE(SUM(Total_Amount), 0) as revenue,
-            COALESCE(AVG(Total_Amount), 0) as avg_ticket
-        FROM `{DS}.Sales_Transactions_Header`
-        WHERE Store_ID = @store_id
-          AND Business_Date = @target_date
-          AND EXTRACT(HOUR FROM Open_Timestamp) = @hour
-          AND Is_Voided = FALSE
+            COALESCE(SUM("Total_Amount"), 0) as revenue,
+            COALESCE(AVG("Total_Amount"), 0) as avg_ticket
+        FROM "Sales_Transactions_Header"
+        WHERE "Store_ID" = %(store_id)s
+          AND "Business_Date" = %(target_date)s
+          AND EXTRACT(HOUR FROM "Open_Timestamp") = %(hour)s
+          AND "Is_Voided" = false
     """, {"store_id": store_id, "target_date": target_date, "hour": hour})
 
     # Staff working during this hour
-    staff = db.query(f"""
+    staff = db.query("""
         SELECT DISTINCT
-            e.Employee_ID,
-            e.First_Name,
-            e.Last_Name,
-            e.Role_Code,
-            t.Clock_In_Time,
-            t.Clock_Out_Time
-        FROM `{DS}.Time_Attendance_Actuals` t
-        JOIN `{DS}.Employee_Master_Profile` e ON t.Employee_ID = e.Employee_ID
-        WHERE t.Store_ID = @store_id
-          AND t.Shift_Date = @target_date
-          AND t.Clock_In_Time IS NOT NULL
-          AND EXTRACT(HOUR FROM t.Clock_In_Time) <= @hour
-          AND (t.Clock_Out_Time IS NULL OR EXTRACT(HOUR FROM t.Clock_Out_Time) >= @hour)
+            e."Employee_ID",
+            e."First_Name",
+            e."Last_Name",
+            e."Role_Code",
+            t."Clock_In_Time",
+            t."Clock_Out_Time"
+        FROM "Time_Attendance_Actuals" t
+        JOIN "Employee_Master_Profile" e ON t."Employee_ID" = e."Employee_ID"
+        WHERE t."Store_ID" = %(store_id)s
+          AND t."Shift_Date" = %(target_date)s
+          AND t."Clock_In_Time" IS NOT NULL
+          AND EXTRACT(HOUR FROM t."Clock_In_Time") <= %(hour)s
+          AND (t."Clock_Out_Time" IS NULL OR EXTRACT(HOUR FROM t."Clock_Out_Time") >= %(hour)s)
     """, {"store_id": store_id, "target_date": target_date, "hour": hour})
 
     # Top items sold this hour
-    top_items = db.query(f"""
+    top_items = db.query("""
         SELECT
-            li.Item_Name,
-            li.Item_Type,
-            SUM(li.Quantity) as quantity,
-            SUM(li.Line_Total) as revenue
-        FROM `{DS}.Sales_Order_Line_Items` li
-        JOIN `{DS}.Sales_Transactions_Header` t ON li.Transaction_UUID = t.Transaction_UUID
-        WHERE t.Store_ID = @store_id
-          AND t.Business_Date = @target_date
-          AND EXTRACT(HOUR FROM t.Open_Timestamp) = @hour
-          AND t.Is_Voided = FALSE
-          AND li.Item_Type = 'Base_Beverage'
-        GROUP BY li.Item_Name, li.Item_Type
+            li."Item_Name",
+            li."Item_Type",
+            SUM(li."Quantity") as quantity,
+            SUM(li."Line_Total") as revenue
+        FROM "Sales_Order_Line_Items" li
+        JOIN "Sales_Transactions_Header" t ON li."Transaction_UUID" = t."Transaction_UUID"
+        WHERE t."Store_ID" = %(store_id)s
+          AND t."Business_Date" = %(target_date)s
+          AND EXTRACT(HOUR FROM t."Open_Timestamp") = %(hour)s
+          AND t."Is_Voided" = false
+          AND li."Item_Type" = 'Base_Beverage'
+        GROUP BY li."Item_Name", li."Item_Type"
         ORDER BY quantity DESC
         LIMIT 5
     """, {"store_id": store_id, "target_date": target_date, "hour": hour})
 
     # Service channel breakdown
-    channels = db.query(f"""
+    channels = db.query("""
         SELECT
-            Service_Channel,
+            "Service_Channel",
             COUNT(*) as count,
-            SUM(Total_Amount) as revenue
-        FROM `{DS}.Sales_Transactions_Header`
-        WHERE Store_ID = @store_id
-          AND Business_Date = @target_date
-          AND EXTRACT(HOUR FROM Open_Timestamp) = @hour
-          AND Is_Voided = FALSE
-        GROUP BY Service_Channel
+            SUM("Total_Amount") as revenue
+        FROM "Sales_Transactions_Header"
+        WHERE "Store_ID" = %(store_id)s
+          AND "Business_Date" = %(target_date)s
+          AND EXTRACT(HOUR FROM "Open_Timestamp") = %(hour)s
+          AND "Is_Voided" = false
+        GROUP BY "Service_Channel"
     """, {"store_id": store_id, "target_date": target_date, "hour": hour})
 
     total_tx = tx_stats["transaction_count"] if tx_stats else 0
 
     # Drive-thru speed for this hour
-    dt_speed = db.query_one(f"""
+    dt_speed = db.query_one("""
         SELECT
-            AVG(Duration_Seconds) as avg_seconds,
+            AVG("Duration_Seconds") as avg_seconds,
             COUNT(*) as car_count
-        FROM `{DS}.Drive_Thru_Loop_Metrics`
-        WHERE Store_ID = @store_id
-          AND Business_Date = @target_date
-          AND EXTRACT(HOUR FROM Arrival_Time) = @hour
-          AND Sensor_ID = 'Window'
+        FROM "Drive_Thru_Loop_Metrics"
+        WHERE "Store_ID" = %(store_id)s
+          AND "Business_Date" = %(target_date)s
+          AND EXTRACT(HOUR FROM "Arrival_Time") = %(hour)s
+          AND "Sensor_ID" = 'Window'
     """, {"store_id": store_id, "target_date": target_date, "hour": hour})
 
     # Labor cost for this hour (approximate)
-    labor = db.query_one(f"""
+    labor = db.query_one("""
         SELECT
-            COUNT(DISTINCT t.Employee_ID) as staff_count,
-            SUM(e.Hourly_Wage) as hourly_labor_cost
-        FROM `{DS}.Time_Attendance_Actuals` t
-        JOIN `{DS}.Employee_Master_Profile` e ON t.Employee_ID = e.Employee_ID
-        WHERE t.Store_ID = @store_id
-          AND t.Shift_Date = @target_date
-          AND t.Clock_In_Time IS NOT NULL
-          AND EXTRACT(HOUR FROM t.Clock_In_Time) <= @hour
-          AND (t.Clock_Out_Time IS NULL OR EXTRACT(HOUR FROM t.Clock_Out_Time) >= @hour)
+            COUNT(DISTINCT t."Employee_ID") as staff_count,
+            SUM(e."Hourly_Wage") as hourly_labor_cost
+        FROM "Time_Attendance_Actuals" t
+        JOIN "Employee_Master_Profile" e ON t."Employee_ID" = e."Employee_ID"
+        WHERE t."Store_ID" = %(store_id)s
+          AND t."Shift_Date" = %(target_date)s
+          AND t."Clock_In_Time" IS NOT NULL
+          AND EXTRACT(HOUR FROM t."Clock_In_Time") <= %(hour)s
+          AND (t."Clock_Out_Time" IS NULL OR EXTRACT(HOUR FROM t."Clock_Out_Time") >= %(hour)s)
     """, {"store_id": store_id, "target_date": target_date, "hour": hour})
 
     return {
@@ -313,37 +310,37 @@ async def get_sales_by_category(
     target_date = date or settings.data_current_date
 
     # Get category breakdown
-    categories = db.query(f"""
+    categories = db.query("""
         SELECT
-            pc.Category_Name,
-            COUNT(DISTINCT li.Transaction_UUID) as transaction_count,
-            SUM(li.Quantity) as quantity_sold,
-            SUM(li.Line_Total) as revenue
-        FROM `{DS}.Sales_Order_Line_Items` li
-        JOIN `{DS}.Sales_Transactions_Header` t ON li.Transaction_UUID = t.Transaction_UUID
-        JOIN `{DS}.Product_Catalog` p ON li.Item_SKU = p.Item_SKU
-        JOIN `{DS}.Product_Categories` pc ON p.Category_ID = pc.Category_ID
-        WHERE t.Store_ID = @store_id
-          AND t.Business_Date = @target_date
-          AND t.Is_Voided = FALSE
-        GROUP BY pc.Category_ID, pc.Category_Name
+            pc."Category_Name",
+            COUNT(DISTINCT li."Transaction_UUID") as transaction_count,
+            SUM(li."Quantity") as quantity_sold,
+            SUM(li."Line_Total") as revenue
+        FROM "Sales_Order_Line_Items" li
+        JOIN "Sales_Transactions_Header" t ON li."Transaction_UUID" = t."Transaction_UUID"
+        JOIN "Product_Catalog" p ON li."Item_SKU" = p."Item_SKU"
+        JOIN "Product_Categories" pc ON p."Category_ID" = pc."Category_ID"
+        WHERE t."Store_ID" = %(store_id)s
+          AND t."Business_Date" = %(target_date)s
+          AND t."Is_Voided" = false
+        GROUP BY pc."Category_ID", pc."Category_Name"
         ORDER BY revenue DESC
     """, {"store_id": store_id, "target_date": target_date})
 
     total_revenue = sum(float(c["revenue"] or 0) for c in categories)
 
     # Get item type breakdown (Base_Beverage, Modifier, Food, etc.)
-    item_types = db.query(f"""
+    item_types = db.query("""
         SELECT
-            li.Item_Type,
-            SUM(li.Quantity) as quantity,
-            SUM(li.Line_Total) as revenue
-        FROM `{DS}.Sales_Order_Line_Items` li
-        JOIN `{DS}.Sales_Transactions_Header` t ON li.Transaction_UUID = t.Transaction_UUID
-        WHERE t.Store_ID = @store_id
-          AND t.Business_Date = @target_date
-          AND t.Is_Voided = FALSE
-        GROUP BY li.Item_Type
+            li."Item_Type",
+            SUM(li."Quantity") as quantity,
+            SUM(li."Line_Total") as revenue
+        FROM "Sales_Order_Line_Items" li
+        JOIN "Sales_Transactions_Header" t ON li."Transaction_UUID" = t."Transaction_UUID"
+        WHERE t."Store_ID" = %(store_id)s
+          AND t."Business_Date" = %(target_date)s
+          AND t."Is_Voided" = false
+        GROUP BY li."Item_Type"
         ORDER BY revenue DESC
     """, {"store_id": store_id, "target_date": target_date})
 
@@ -380,19 +377,19 @@ async def get_payment_breakdown(
     db = get_db()
     target_date = date or settings.data_current_date
 
-    results = db.query(f"""
+    results = db.query("""
         SELECT
-            p.Tender_Type,
+            p."Tender_Type",
             COUNT(*) as transaction_count,
-            SUM(p.Amount_Tendered) as total_amount,
-            SUM(p.Tip_Amount) as total_tips,
-            AVG(p.Amount_Tendered) as avg_amount
-        FROM `{DS}.Sales_Payments` p
-        JOIN `{DS}.Sales_Transactions_Header` t ON p.Transaction_UUID = t.Transaction_UUID
-        WHERE t.Store_ID = @store_id
-          AND t.Business_Date = @target_date
-          AND t.Is_Voided = FALSE
-        GROUP BY p.Tender_Type
+            SUM(p."Amount_Tendered") as total_amount,
+            SUM(p."Tip_Amount") as total_tips,
+            AVG(p."Amount_Tendered") as avg_amount
+        FROM "Sales_Payments" p
+        JOIN "Sales_Transactions_Header" t ON p."Transaction_UUID" = t."Transaction_UUID"
+        WHERE t."Store_ID" = %(store_id)s
+          AND t."Business_Date" = %(target_date)s
+          AND t."Is_Voided" = false
+        GROUP BY p."Tender_Type"
         ORDER BY transaction_count DESC
     """, {"store_id": store_id, "target_date": target_date})
 
@@ -431,18 +428,18 @@ async def get_loyalty_stats(
     db = get_db()
     target_date = date or settings.data_current_date
 
-    stats = db.query_one(f"""
+    stats = db.query_one("""
         SELECT
             COUNT(*) as total_transactions,
-            SUM(CASE WHEN Customer_Loyalty_ID IS NOT NULL THEN 1 ELSE 0 END) as loyalty_transactions,
-            SUM(CASE WHEN Customer_Loyalty_ID IS NOT NULL THEN Total_Amount ELSE 0 END) as loyalty_revenue,
-            SUM(CASE WHEN Customer_Loyalty_ID IS NULL THEN Total_Amount ELSE 0 END) as non_loyalty_revenue,
-            AVG(CASE WHEN Customer_Loyalty_ID IS NOT NULL THEN Total_Amount END) as loyalty_avg_ticket,
-            AVG(CASE WHEN Customer_Loyalty_ID IS NULL THEN Total_Amount END) as non_loyalty_avg_ticket
-        FROM `{DS}.Sales_Transactions_Header`
-        WHERE Store_ID = @store_id
-          AND Business_Date = @target_date
-          AND Is_Voided = FALSE
+            SUM(CASE WHEN "Customer_Loyalty_ID" IS NOT NULL THEN 1 ELSE 0 END) as loyalty_transactions,
+            SUM(CASE WHEN "Customer_Loyalty_ID" IS NOT NULL THEN "Total_Amount" ELSE 0 END) as loyalty_revenue,
+            SUM(CASE WHEN "Customer_Loyalty_ID" IS NULL THEN "Total_Amount" ELSE 0 END) as non_loyalty_revenue,
+            AVG(CASE WHEN "Customer_Loyalty_ID" IS NOT NULL THEN "Total_Amount" END) as loyalty_avg_ticket,
+            AVG(CASE WHEN "Customer_Loyalty_ID" IS NULL THEN "Total_Amount" END) as non_loyalty_avg_ticket
+        FROM "Sales_Transactions_Header"
+        WHERE "Store_ID" = %(store_id)s
+          AND "Business_Date" = %(target_date)s
+          AND "Is_Voided" = false
     """, {"store_id": store_id, "target_date": target_date})
 
     total_tx = stats["total_transactions"] if stats else 0
@@ -476,31 +473,31 @@ async def get_linebuster_stats(
     target_date = date or settings.data_current_date
 
     # Queue position distribution
-    queue_dist = db.query(f"""
+    queue_dist = db.query("""
         SELECT
-            Queue_Position,
+            "Queue_Position",
             COUNT(*) as count
-        FROM `{DS}.Sales_Transactions_Header`
-        WHERE Store_ID = @store_id
-          AND Business_Date = @target_date
-          AND Service_Channel = 'Drive_Thru'
-          AND Queue_Position IS NOT NULL
-        GROUP BY Queue_Position
-        ORDER BY Queue_Position
+        FROM "Sales_Transactions_Header"
+        WHERE "Store_ID" = %(store_id)s
+          AND "Business_Date" = %(target_date)s
+          AND "Service_Channel" = 'Drive_Thru'
+          AND "Queue_Position" IS NOT NULL
+        GROUP BY "Queue_Position"
+        ORDER BY "Queue_Position"
     """, {"store_id": store_id, "target_date": target_date})
 
     # Average queue position by hour
-    hourly_queue = db.query(f"""
+    hourly_queue = db.query("""
         SELECT
-            EXTRACT(HOUR FROM Open_Timestamp) as hour,
-            AVG(Queue_Position) as avg_queue_position,
+            EXTRACT(HOUR FROM "Open_Timestamp") as hour,
+            AVG("Queue_Position") as avg_queue_position,
             COUNT(*) as drive_thru_count
-        FROM `{DS}.Sales_Transactions_Header`
-        WHERE Store_ID = @store_id
-          AND Business_Date = @target_date
-          AND Service_Channel = 'Drive_Thru'
-          AND Queue_Position IS NOT NULL
-        GROUP BY EXTRACT(HOUR FROM Open_Timestamp)
+        FROM "Sales_Transactions_Header"
+        WHERE "Store_ID" = %(store_id)s
+          AND "Business_Date" = %(target_date)s
+          AND "Service_Channel" = 'Drive_Thru'
+          AND "Queue_Position" IS NOT NULL
+        GROUP BY EXTRACT(HOUR FROM "Open_Timestamp")
         ORDER BY hour
     """, {"store_id": store_id, "target_date": target_date})
 

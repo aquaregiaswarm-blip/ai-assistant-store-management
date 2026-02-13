@@ -1,14 +1,17 @@
-"""GM AI Agent orchestrator using OpenAI API with tools."""
+"""GM AI Agent orchestrator supporting OpenAI and Claude via Vertex AI."""
 import json
 import os
 from decimal import Decimal
 from datetime import date, datetime
-from typing import Dict, List, Generator
-from openai import OpenAI
+from typing import Dict, List, Generator, Optional
+
+from .prompts import get_system_prompt
+from .tools import execute_tool, TOOL_DEFINITIONS
+from ..config import settings
 
 
 class DecimalEncoder(json.JSONEncoder):
-    """Custom JSON encoder that handles Decimal and date types from DuckDB."""
+    """Custom JSON encoder that handles Decimal and date types."""
     def default(self, obj):
         if isinstance(obj, Decimal):
             return float(obj)
@@ -16,163 +19,71 @@ class DecimalEncoder(json.JSONEncoder):
             return obj.isoformat()
         return super().default(obj)
 
-from .prompts import get_system_prompt
-from .tools import execute_tool
-from ..config import settings
 
-
-# Convert our tool definitions to OpenAI function format
+# Convert tool definitions to OpenAI function format
 OPENAI_TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "query_transactions",
-            "description": "Query sales transaction data with flexible aggregation. Use this to answer questions about sales, revenue, transaction counts, and order patterns.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "store_id": {"type": "integer", "description": "Store ID to query"},
-                    "date": {"type": "string", "description": "Date to query in YYYY-MM-DD format"},
-                    "aggregation": {
-                        "type": "string",
-                        "enum": ["daily", "hourly", "by_channel", "by_employee"],
-                        "description": "How to aggregate the data"
-                    }
-                },
-                "required": ["store_id", "date"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "query_workforce",
-            "description": "Query workforce and scheduling data. Use this for questions about who's working, schedules, attendance, and labor hours.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "store_id": {"type": "integer", "description": "Store ID to query"},
-                    "query_type": {
-                        "type": "string",
-                        "enum": ["schedule_today", "whos_working", "attendance", "minors"],
-                        "description": "Type of workforce query"
-                    },
-                    "date": {"type": "string", "description": "Date to query in YYYY-MM-DD format"}
-                },
-                "required": ["store_id", "query_type", "date"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "check_compliance",
-            "description": "Check for labor compliance issues including minor hours, break violations, and overtime risk.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "store_id": {"type": "integer", "description": "Store ID to query"},
-                    "check_type": {
-                        "type": "string",
-                        "enum": ["violations", "minor_status", "overtime_risk", "all"],
-                        "description": "Type of compliance check"
-                    },
-                    "date": {"type": "string", "description": "Date to query in YYYY-MM-DD format"}
-                },
-                "required": ["store_id", "check_type", "date"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "compare_performance",
-            "description": "Compare current performance to historical periods.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "store_id": {"type": "integer", "description": "Store ID to query"},
-                    "date": {"type": "string", "description": "Date to compare from in YYYY-MM-DD format"},
-                    "comparison": {
-                        "type": "string",
-                        "enum": ["yesterday", "last_week", "same_day_last_week"],
-                        "description": "What period to compare against"
-                    }
-                },
-                "required": ["store_id", "date", "comparison"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_top_items",
-            "description": "Get the best-selling items.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "store_id": {"type": "integer", "description": "Store ID to query"},
-                    "date": {"type": "string", "description": "Date to query in YYYY-MM-DD format"},
-                    "limit": {"type": "integer", "description": "Number of items to return (default 10)"},
-                    "item_type": {
-                        "type": "string",
-                        "enum": ["Base_Beverage", "Food", "Modifier", "all"],
-                        "description": "Filter by item type"
-                    }
-                },
-                "required": ["store_id", "date"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "analyze_linebuster",
-            "description": "Analyze linebuster effectiveness through queue position data.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "store_id": {"type": "integer", "description": "Store ID to query"},
-                    "date": {"type": "string", "description": "Date to query in YYYY-MM-DD format"}
-                },
-                "required": ["store_id", "date"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_peak_hours",
-            "description": "Get detailed peak hour analysis showing busiest times.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "store_id": {"type": "integer", "description": "Store ID to query"},
-                    "date": {"type": "string", "description": "Date to query in YYYY-MM-DD format"}
-                },
-                "required": ["store_id", "date"]
-            }
+            "name": tool["name"],
+            "description": tool["description"],
+            "parameters": tool["input_schema"]
         }
     }
+    for tool in TOOL_DEFINITIONS
 ]
 
 
 class GMAgent:
-    """AI Agent for Swig General Managers using OpenAI."""
+    """AI Agent for Swig General Managers supporting OpenAI and Claude."""
 
     def __init__(self, store_id: int, store_name: str):
-        # Get API key from settings (loaded from .env) or environment
-        api_key = settings.openai_api_key or os.environ.get("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY environment variable is required")
-
-        self.client = OpenAI(api_key=api_key)
         self.store_id = store_id
         self.store_name = store_name
         self.current_date = settings.data_current_date
         self.conversation_history: List[Dict] = []
-        self.model = "gpt-4o"
         self.max_tokens = 4096
+        
+        # Determine provider from model name
+        self.model = settings.llm_model
+        self.provider = self._detect_provider(self.model)
+        
+        # Initialize appropriate client
+        if self.provider == "openai":
+            self._init_openai()
+        elif self.provider == "anthropic":
+            self._init_anthropic()
+        else:
+            raise ValueError(f"Unknown model provider for: {self.model}")
+
+    def _detect_provider(self, model: str) -> str:
+        """Detect provider from model name."""
+        if model.startswith("gpt-") or model.startswith("o1"):
+            return "openai"
+        elif model.startswith("claude-"):
+            return "anthropic"
+        else:
+            # Default to OpenAI for unknown models
+            return "openai"
+
+    def _init_openai(self):
+        """Initialize OpenAI client."""
+        from openai import OpenAI
+        
+        api_key = settings.openai_api_key or os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY environment variable is required for OpenAI models")
+        
+        self.client = OpenAI(api_key=api_key)
+
+    def _init_anthropic(self):
+        """Initialize Anthropic client via Vertex AI."""
+        from anthropic import AnthropicVertex
+        
+        self.client = AnthropicVertex(
+            region=settings.gcp_region,
+            project_id=settings.gcp_project_id
+        )
 
     def get_system_prompt(self) -> str:
         """Get the system prompt with store context."""
@@ -189,11 +100,18 @@ class GMAgent:
             "content": user_message
         })
 
+        if self.provider == "openai":
+            return self._chat_openai()
+        else:
+            return self._chat_anthropic()
+
+    def _chat_openai(self) -> str:
+        """Handle chat with OpenAI."""
         response = self._call_openai()
 
         # Handle tool calls loop
         while response.choices[0].message.tool_calls:
-            tool_results = self._process_tool_calls(response)
+            tool_results = self._process_openai_tool_calls(response)
 
             # Add assistant message with tool calls
             self.conversation_history.append(response.choices[0].message)
@@ -214,16 +132,51 @@ class GMAgent:
 
         return assistant_message
 
-    def chat_stream(self, user_message: str) -> Generator[str, None, None]:
-        """Send a message and stream the response."""
-        # For simplicity, just yield the full response
-        response = self.chat(user_message)
-        yield response
+    def _chat_anthropic(self) -> str:
+        """Handle chat with Anthropic/Claude."""
+        response = self._call_anthropic()
+
+        # Handle tool use loop
+        while response.stop_reason == "tool_use":
+            tool_results = self._process_anthropic_tool_use(response)
+
+            # Add assistant response to history
+            self.conversation_history.append({
+                "role": "assistant",
+                "content": response.content
+            })
+
+            # Add tool results
+            self.conversation_history.append({
+                "role": "user",
+                "content": tool_results
+            })
+
+            response = self._call_anthropic()
+
+        # Extract final text response
+        assistant_message = ""
+        for block in response.content:
+            if hasattr(block, 'text'):
+                assistant_message += block.text
+
+        self.conversation_history.append({
+            "role": "assistant",
+            "content": assistant_message
+        })
+
+        return assistant_message
 
     def _call_openai(self):
         """Make a call to the OpenAI API."""
         messages = [{"role": "system", "content": self.get_system_prompt()}]
-        messages.extend(self.conversation_history)
+        
+        # Convert history for OpenAI (handle message objects)
+        for msg in self.conversation_history:
+            if hasattr(msg, 'model_dump'):
+                messages.append(msg.model_dump())
+            else:
+                messages.append(msg)
 
         return self.client.chat.completions.create(
             model=self.model,
@@ -232,8 +185,30 @@ class GMAgent:
             messages=messages
         )
 
-    def _process_tool_calls(self, response) -> List[Dict]:
-        """Process tool calls from the response and return results."""
+    def _call_anthropic(self):
+        """Make a call to the Anthropic API via Vertex."""
+        # Build messages (Anthropic doesn't use system in messages array)
+        messages = []
+        for msg in self.conversation_history:
+            if isinstance(msg.get("content"), list):
+                # Already formatted content blocks
+                messages.append(msg)
+            else:
+                messages.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
+
+        return self.client.messages.create(
+            model=self.model,
+            max_tokens=self.max_tokens,
+            system=self.get_system_prompt(),
+            tools=TOOL_DEFINITIONS,
+            messages=messages
+        )
+
+    def _process_openai_tool_calls(self, response) -> List[Dict]:
+        """Process tool calls from OpenAI response."""
         tool_results = []
 
         for tool_call in response.choices[0].message.tool_calls:
@@ -256,6 +231,38 @@ class GMAgent:
             })
 
         return tool_results
+
+    def _process_anthropic_tool_use(self, response) -> List[Dict]:
+        """Process tool use from Anthropic response."""
+        tool_results = []
+
+        for block in response.content:
+            if block.type == "tool_use":
+                tool_name = block.name
+                tool_input = block.input
+
+                # Inject store_id and date if not provided
+                if "store_id" not in tool_input:
+                    tool_input["store_id"] = self.store_id
+                if "date" not in tool_input:
+                    tool_input["date"] = self.current_date
+
+                # Execute the tool
+                result = execute_tool(tool_name, tool_input)
+
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": json.dumps(result, cls=DecimalEncoder)
+                })
+
+        return tool_results
+
+    def chat_stream(self, user_message: str) -> Generator[str, None, None]:
+        """Send a message and stream the response."""
+        # For simplicity, just yield the full response
+        response = self.chat(user_message)
+        yield response
 
     def clear_history(self):
         """Clear conversation history."""
